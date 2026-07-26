@@ -5,7 +5,6 @@ Static, local-first finder for OSM-mapped Bohlenwege and boardwalk-like paths.
 ## Run
 
 ```sh
-cd /Users/johannes.berger/git/bohlenwegweiser
 python3 -m http.server 5173
 ```
 
