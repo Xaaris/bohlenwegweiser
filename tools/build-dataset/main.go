@@ -93,6 +93,11 @@ const (
 	overpassTimeoutS = 900
 	httpTimeout      = 20 * time.Minute
 	userAgent        = "Bohlenwegweiser-dataset-builder/0.1 (hobby project)"
+
+	// Paths shorter than this are dropped. A 20 m plank across a ditch is not
+	// something anyone travels to see, and leaving them out takes the file from
+	// 1.26 MB to 0.54 MB gzipped. Must match MIN_LENGTH_M in src/config.ts.
+	minLengthM = 25.0
 )
 
 // --- Overpass response ---
@@ -184,6 +189,16 @@ func run(out, from, save string) error {
 		return fmt.Errorf("no ways left after filtering: the tag filters are probably wrong")
 	}
 
+	// Drop paths shorter than the UI's minimum. This has to run on assembled
+	// groups, not single ways: 81% of ways are under 25 m because OSM splits
+	// paths into short segments, and filtering them individually would delete
+	// 725 boardwalks that are long enough once joined.
+	beforeLength := len(ways)
+	ways = keepLongEnough(ways, minLengthM)
+	if len(ways) == 0 {
+		return fmt.Errorf("no ways left after the length filter")
+	}
+
 	// Sorting by id makes the output stable, so re-running with unchanged data
 	// produces an identical file and git shows no diff.
 	slices.SortFunc(ways, func(a, b outWay) int { return cmp.Compare(a.I, b.I) })
@@ -203,6 +218,7 @@ func run(out, from, save string) error {
 	log.Printf("  dropped, no evidence: %d", st.noConfidence)
 	log.Printf("  dropped, < 2 points:  %d", st.tooFewPoints)
 	log.Printf("  dropped, duplicate:   %d", st.duplicate)
+	log.Printf("  dropped, group < %.0fm: %d", minLengthM, beforeLength-len(ways))
 	log.Printf("ways written:           %d", len(ways))
 	log.Printf("%s: %.2f MB (roughly a fifth of that gzipped)",
 		out, float64(size)/(1<<20))

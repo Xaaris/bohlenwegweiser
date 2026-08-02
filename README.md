@@ -82,10 +82,28 @@ that took a median of 2.9 s, ranging from 0.6 s to a timeout, because public
 instances are shared and their load is unpredictable. Racing two mirrors helped
 but did not fix it.
 
-All boardwalk candidates in Germany come to 48,000 ways, which is 1.3 MB
-gzipped — small enough to ship as a static file.
+All boardwalk candidates in Germany come to 48,000 ways. After dropping paths
+under 25 m the file holds 15,256 ways at 0.54 MB gzipped — small enough to ship
+as a static file.
 
 The dataset is as old as the last rebuild. For boardwalks that is fine.
+
+### The 25 m minimum
+
+Nothing shorter than 25 m is shipped, so the length filter starts there. A 20 m
+plank across a ditch is not something anyone travels to see, and leaving them out
+halved the download: 1.26 MB to 0.54 MB gzipped.
+
+The filter has to run on assembled groups, not on individual ways. Measured on
+the real data: the median OSM way is 10 m long and **81% are under 25 m**,
+because paths get split into many short segments. Filtering ways individually
+would have deleted 725 boardwalks that are over 25 m once joined, losing 60.7 km
+of real path.
+
+That means `tools/build-dataset` needs the same grouping logic as the browser
+(`group.go` mirrors `connectedComponents` in `src/boardwalks.ts`). The two were
+checked against each other on the full dataset: both keep exactly the same 15,256
+ways.
 
 ### Viewport rendering
 
@@ -93,7 +111,13 @@ Every pan and zoom redraws whatever falls inside the visible area, which
 is cheap once the dataset is in memory.
 
 Below zoom 9 nothing is drawn and the map says so (`MIN_ZOOM_FOR_RESULTS` in
-`src/config.ts`).
+`src/config.ts`). Measured over Hamburg, the densest area:
+
+| zoom | lines drawn | blocking |
+| ---- | ----------- | -------- |
+| 10   | 291         | none     |
+| 9    | 741         | none     |
+| 8    | 2559        | 87 ms    |
 
 So 9 is the lowest level that still pans smoothly. Further out the lines also
 overlap into noise, which makes them useless to look at anyway.
@@ -143,8 +167,8 @@ Two things make this work without further configuration:
 - `base: "./"` in `vite.config.ts`, so assets resolve relative to the page. The
   usual failure mode for project pages is absolute `/assets/...` paths, which
   404 under a subpath.
-- GitHub Pages serves JSON gzipped, so the 6.3 MB dataset goes over the wire at
-  1.3 MB. Verified against a live Pages site: `content-encoding: gzip`.
+- GitHub Pages serves JSON gzipped, so the 2.5 MB dataset goes over the wire at
+  0.54 MB. Verified against a live Pages site: `content-encoding: gzip`.
 
 Pages limits are 1 GB per site and 100 GB of traffic per month, both far above
 what this needs. The deploy workflow runs `npm run check` first, so a failing

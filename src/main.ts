@@ -8,7 +8,12 @@
 import "./styles.css";
 
 import { CONFIDENCE_LABELS, groupWays, parseWays } from "./boardwalks.js";
-import { DEFAULT_MIN_LENGTH_M, MAX_LIST_ITEMS, MIN_ZOOM_FOR_RESULTS } from "./config.js";
+import {
+  DEFAULT_MIN_LENGTH_M,
+  MAX_LIST_ITEMS,
+  MIN_LENGTH_M,
+  MIN_ZOOM_FOR_RESULTS,
+} from "./config.js";
 import { type Dataset, loadDataset, SearchError, waysInBounds } from "./dataset.js";
 import { formatDistance } from "./geo.js";
 import { BoardwalkMap } from "./map.js";
@@ -57,7 +62,9 @@ el.locate.addEventListener("click", () => void locate());
 el.sheetToggle.addEventListener("click", () => toggleSheet());
 
 el.minLength.addEventListener("change", () => {
-  state.minLengthM = Number(el.minLength.value);
+  // Clamped, because the dataset contains nothing shorter: the builder filtered
+  // those out. A lower value here would just promise results that cannot exist.
+  state.minLengthM = Math.max(MIN_LENGTH_M, Number(el.minLength.value));
   applyFilter();
   reportCount();
 });
@@ -243,7 +250,7 @@ function render(): void {
     return;
   }
 
-  // Cap the list. Berlin at zoom 10 with no length filter yields 837 groups,
+  // Cap the list. Dense areas at the minimum zoom yield hundreds of groups,
   // which took 79 ms to lay out and is not something anyone scrolls through.
   // The map still draws all of them; this only limits the sidebar.
   const shown = state.visible.slice(0, MAX_LIST_ITEMS);

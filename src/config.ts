@@ -20,6 +20,18 @@ export const DEFAULT_ZOOM = 6;
 export const DEFAULT_MIN_LENGTH_M = 50;
 
 /**
+ * Shortest path the dataset contains.
+ *
+ * The builder drops anything below this, so the filter cannot go lower. It has
+ * to match minLengthM in tools/build-dataset/main.go.
+ *
+ * Filtering there rather than here halves the download: 81% of OSM ways are
+ * under 25 m because paths get split into short segments, and dropping the
+ * groups that stay under 25 m took the file from 1.26 MB to 0.54 MB gzipped.
+ */
+export const MIN_LENGTH_M = 25;
+
+/**
  * Below this zoom level nothing is drawn.
  *
  * Measured over Hamburg, the densest area, drawing every way in view:
