@@ -75,11 +75,8 @@ export function parseWays(ways: RawWay[]): Way[] {
 /**
  * Merges connected ways into groups, longest first.
  *
- * Sorted purely by length, because that is what the cards show. An earlier
- * version added a confidence bonus and a distance penalty, which measurably
- * reordered the list: in Berlin an 83 m way was listed above an 88 m one.
- * Confidence is shown as a label, and there is no meaningful distance to
- * measure from once the whole viewport is rendered.
+ * Sorted by length alone, because that is what the cards show. Confidence is a
+ * label of its own, and mixing it into the order only makes the list look wrong.
  */
 export function groupWays(ways: Way[]): Group[] {
   return connectedComponents(ways)

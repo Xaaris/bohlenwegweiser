@@ -12,9 +12,12 @@ import { DEFAULT_CENTER, DEFAULT_ZOOM, TILE_ATTRIBUTION, TILE_URL } from "./conf
 import { formatDistance } from "./geo.js";
 import type { Bounds, Confidence, Group, Point } from "./types.js";
 
+/* Line colours follow the logo's wood brown, with distinguishable tones for the
+ * lower confidence levels. Kept in step with the palette in styles.css by hand,
+ * since CSS variables are not readable from here. */
 const LINE_STYLES: Record<Confidence, L.PolylineOptions> = {
-  high: { color: "#315f49", weight: 5, opacity: 0.9 },
-  medium: { color: "#197278", weight: 5, opacity: 0.88 },
+  high: { color: "#532d14", weight: 5, opacity: 0.9 },
+  medium: { color: "#8a6a3f", weight: 5, opacity: 0.88 },
   low: { color: "#b7791f", weight: 5, opacity: 0.84, dashArray: "6 6" },
 };
 
@@ -72,11 +75,8 @@ export class BoardwalkMap {
   /**
    * Moves the view; the resulting moveend triggers a redraw.
    *
-   * `offsetY` shifts the target up by that many pixels, so a point can be
-   * centred in the part of the map that is actually visible. On narrow screens
-   * the bottom sheet covers the lower half: without this, locating put the
-   * position at y=422 while the sheet started at y=287, hiding all 19 drawn
-   * lines and making the button look broken.
+   * `offsetY` is how much of the map is covered by the bottom sheet, so the
+   * target lands in the visible part rather than behind it.
    */
   moveTo(point: Point, zoom = this.map.getZoom(), offsetY = 0): void {
     const target = L.latLng(point.lat, point.lon);
@@ -125,9 +125,9 @@ export class BoardwalkMap {
 
         line.addTo(this.resultLayer);
 
-        // Keep the lines out of the tab order. Leaflet makes every interactive
-        // path focusable, which measured 16 tab stops before the first control
-        // with only 7 results on screen — and a focused line offers no action.
+        // Keep the lines out of the tab order: Leaflet makes every interactive
+        // path focusable, which put 16 tab stops before the first control with
+        // just 7 results on screen, and a focused line offers no action anyway.
         // The same groups are reachable as buttons in the result list.
         line.getElement()?.setAttribute("tabindex", "-1");
 

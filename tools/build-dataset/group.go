@@ -4,11 +4,10 @@
 // deliberate: the browser needs it to display groups, and the builder needs it
 // to decide what to ship.
 //
-// Filtering individual ways would not work. Measured on the real dataset: the
-// median way is 10 m long and 81% are under 25 m, because OSM splits paths into
-// many short segments. Dropping short ways would have deleted 725 boardwalks
-// that are over 25 m once assembled, losing 60.7 km of real path. So the length
-// test has to run on the assembled group.
+// Filtering individual ways does not work: the median way is 10 m long and 81%
+// are under 25 m, because OSM splits paths into many short segments. Dropping
+// short ways would delete 725 boardwalks that are over 25 m once assembled,
+// losing 60.7 km of real path. The length test has to run on the group.
 
 package main
 
@@ -46,8 +45,8 @@ func keepLongEnough(ways []outWay, minLengthM float64) []outWay {
 // connectedComponents groups indices of ways that touch and look like the same
 // path.
 //
-// Only ways whose endpoints share a grid cell are compared, so this stays linear
-// rather than comparing all 48,000 pairs.
+// Only ways whose endpoints share a grid cell are compared, which keeps this
+// linear rather than quadratic in the 48,000 ways.
 func connectedComponents(ways []outWay) [][]int {
 	const cellSize = (joinDistanceM * 2) / 111_320 // degrees
 

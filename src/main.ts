@@ -69,13 +69,7 @@ el.minLength.addEventListener("change", () => {
   reportCount();
 });
 
-/**
- * Collapses the sheet to just its handle and header, or opens it again.
- *
- * Collapsing hides the content below the header via CSS rather than sliding the
- * panel by a measured pixel offset. The offset approach broke whenever the
- * result count changed the panel's height while it was collapsed.
- */
+/** Collapses the sheet to just its handle and header, or opens it again. */
 function toggleSheet(collapse = !isCollapsed()): void {
   const panel = el.panel;
   if (!panel) return;
@@ -145,8 +139,8 @@ function hiddenMapHeight(): number {
 /**
  * Turns a GeolocationPositionError into something actionable.
  *
- * All three causes used to produce "Standort nicht verfügbar", which gave no
- * hint that the usual fix is in the browser's own settings.
+ * Worth distinguishing: a blocked permission is fixed in the browser settings,
+ * a timeout by trying again.
  */
 function locationErrorMessage(error: unknown): string {
   const code = (error as GeolocationPositionError | undefined)?.code;
@@ -250,9 +244,9 @@ function render(): void {
     return;
   }
 
-  // Cap the list. Dense areas at the minimum zoom yield hundreds of groups,
-  // which took 79 ms to lay out and is not something anyone scrolls through.
-  // The map still draws all of them; this only limits the sidebar.
+  // Cap the list: dense areas at the minimum zoom yield hundreds of groups,
+  // which costs about 79 ms of layout for something nobody scrolls through. The
+  // map still draws all of them.
   const shown = state.visible.slice(0, MAX_LIST_ITEMS);
   shown.forEach((group, index) => {
     el.results.append(resultCard(group, index));
@@ -269,11 +263,8 @@ function render(): void {
 }
 
 /**
- * On narrow screens the ODbL attribution goes at the end of the list.
- *
- * As a fixed footer it took 77 px of a 506 px panel on a 390x844 screen, which
- * is a lot for something nobody needs in view at all times. It is still there,
- * just at the bottom of the scroll.
+ * On narrow screens the ODbL attribution goes at the end of the list, so it stays
+ * reachable without taking 77 px of a short panel.
  */
 function appendAttribution(): void {
   if (!el.footer || !isNarrow()) return;

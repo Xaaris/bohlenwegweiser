@@ -1,10 +1,9 @@
 // Command build-dataset downloads all boardwalk candidates in Germany from
 // Overpass and writes them as a single compact JSON file for the web app.
 //
-// The app used to query Overpass on every search, which measured a median of
-// 2.9 s and regularly timed out. The whole country fits in about 1.3 MB gzipped,
-// so shipping it as a static file makes searching instant and removes the
-// runtime dependency entirely.
+// Shipping the data as a static file makes searching instant and removes the
+// runtime dependency on Overpass, which measured a median of 2.9 s per search
+// and regularly timed out.
 //
 // Run it whenever you want fresh data:
 //
@@ -82,7 +81,7 @@ var keepTags = []string{
 }
 
 // Overpass mirrors, tried in order. One request per manual rebuild is well
-// within the usage policy, unlike the per-search queries this replaces.
+// within their usage policy.
 var endpoints = []string{
 	"https://overpass-api.de/api/interpreter",
 	"https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -94,9 +93,9 @@ const (
 	httpTimeout      = 20 * time.Minute
 	userAgent        = "Bohlenwegweiser-dataset-builder/0.1 (hobby project)"
 
-	// Paths shorter than this are dropped. A 20 m plank across a ditch is not
-	// something anyone travels to see, and leaving them out takes the file from
-	// 1.26 MB to 0.54 MB gzipped. Must match MIN_LENGTH_M in src/config.ts.
+	// Paths shorter than this are dropped: a 20 m plank across a ditch is not
+	// something anyone travels to see, and leaving them out halves the file to
+	// 0.54 MB gzipped. Must match MIN_LENGTH_M in src/config.ts.
 	minLengthM = 25.0
 )
 
@@ -191,8 +190,8 @@ func run(out, from, save string) error {
 
 	// Drop paths shorter than the UI's minimum. This has to run on assembled
 	// groups, not single ways: 81% of ways are under 25 m because OSM splits
-	// paths into short segments, and filtering them individually would delete
-	// 725 boardwalks that are long enough once joined.
+	// paths into short segments, so filtering them individually would delete 725
+	// boardwalks that are long enough once joined.
 	beforeLength := len(ways)
 	ways = keepLongEnough(ways, minLengthM)
 	if len(ways) == 0 {

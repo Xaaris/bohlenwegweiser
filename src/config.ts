@@ -3,9 +3,7 @@
 /**
  * The prebuilt dataset, served as a static file.
  *
- * Rebuild it with `go run ./tools/build-dataset`. Querying Overpass per search
- * measured a median of 2.9 s with frequent timeouts; all of Germany is about
- * 1.3 MB gzipped, so it is loaded once instead.
+ * Rebuild it with `go run ./tools/build-dataset`.
  */
 export const DATASET_URL = "boardwalks.json";
 
@@ -22,12 +20,8 @@ export const DEFAULT_MIN_LENGTH_M = 50;
 /**
  * Shortest path the dataset contains.
  *
- * The builder drops anything below this, so the filter cannot go lower. It has
- * to match minLengthM in tools/build-dataset/main.go.
- *
- * Filtering there rather than here halves the download: 81% of OSM ways are
- * under 25 m because paths get split into short segments, and dropping the
- * groups that stay under 25 m took the file from 1.26 MB to 0.54 MB gzipped.
+ * The builder drops anything below this, which halves the download, so the
+ * filter cannot go lower. Must match minLengthM in tools/build-dataset/main.go.
  */
 export const MIN_LENGTH_M = 25;
 
@@ -68,9 +62,7 @@ export const NAME_PATTERN =
 export const JOIN_DISTANCE_M = 20;
 
 /**
- * Most result cards to put in the sidebar.
- *
- * The map draws everything in view; this only caps the list, which nobody
- * scrolls past a few dozen entries anyway.
+ * Most result cards to put in the sidebar. The map draws everything in view;
+ * this only caps the list.
  */
 export const MAX_LIST_ITEMS = 50;

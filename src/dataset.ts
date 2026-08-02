@@ -1,10 +1,9 @@
 /**
  * Loading and searching the prebuilt dataset.
  *
- * This replaces the old per-search Overpass request. Querying Overpass live
- * measured a median of 2.9 s across five places, with regular timeouts, because
- * public instances are shared and unpredictable. All of Germany fits in about
- * 1.3 MB gzipped, so the app now downloads it once and searches in memory.
+ * All of Germany is about 0.5 MB gzipped, so the browser downloads it once and
+ * filters in memory rather than querying Overpass per search — which measured a
+ * median of 2.9 s with regular timeouts, public instances being shared.
  *
  * Rebuild the file with: go run ./tools/build-dataset
  */

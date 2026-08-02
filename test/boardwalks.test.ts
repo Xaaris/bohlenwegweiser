@@ -162,10 +162,8 @@ describe("groupWays", () => {
   });
 
   it("sorts by length alone, ignoring confidence", () => {
-    // An earlier version scored length plus a confidence bonus minus a distance
-    // penalty, which measurably reordered the list: in Berlin an 83 m way was
-    // listed above an 88 m one. The card shows the length, so anything else is
-    // confusing.
+    // The card shows the length, so mixing confidence into the order would put a
+    // shorter way above a longer one and look like a bug.
     const ways = parseWays([
       // Name only, so low confidence, but the longest.
       way(1, { highway: "footway", name: "Bohlenweg" }, line(53, 8, 500)),
@@ -208,7 +206,7 @@ describe("groupWays", () => {
   });
 
   it("stays fast with a lot of ways", () => {
-    // The grid lookup means we never compare all pairs; 1500 ways used to be
+    // The grid lookup avoids comparing all pairs, which at 1500 ways would be
     // over a million comparisons.
     const ways = Array.from({ length: 1500 }, (_, i) =>
       way(

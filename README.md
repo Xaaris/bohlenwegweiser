@@ -1,7 +1,13 @@
+<p align="center">
+  <img src="docs/logo.png" alt="Bohlenwegweiser" width="200" />
+</p>
+
 # Bohlenwegweiser
 
 Finds Bohlenwege, Moorstege and other boardwalk-like paths using OpenStreetMap
 data. Pan and zoom the map; everything in view is drawn and listed.
+
+Live at <https://xaaris.github.io/bohlenwegweiser/>.
 
 Searching runs entirely in the browser against a prebuilt dataset of all
 boardwalks in Germany, so it updates as you move.
