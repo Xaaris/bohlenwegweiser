@@ -65,21 +65,13 @@ el.minLength.addEventListener("change", () => {
 /**
  * Collapses the sheet to just its handle and header, or opens it again.
  *
- * The distance to slide is measured rather than hard-coded, because it depends
- * on the height of the controls, the list and the viewport.
+ * Collapsing hides the content below the header via CSS rather than sliding the
+ * panel by a measured pixel offset. The offset approach broke whenever the
+ * result count changed the panel's height while it was collapsed.
  */
 function toggleSheet(collapse = !isCollapsed()): void {
   const panel = el.panel;
   if (!panel) return;
-
-  if (collapse) {
-    const header = panel.querySelector("header");
-    const keepVisible =
-      el.sheetToggle.getBoundingClientRect().height +
-      (header?.getBoundingClientRect().height ?? 0);
-    const hide = panel.getBoundingClientRect().height - keepVisible;
-    panel.style.setProperty("--sheet-hidden", `${Math.max(0, Math.round(hide))}px`);
-  }
 
   panel.classList.toggle("collapsed", collapse);
   el.sheetToggle.setAttribute("aria-expanded", String(!collapse));

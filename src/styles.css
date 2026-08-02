@@ -410,14 +410,19 @@ select {
     border-right: 0;
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -6px 24px rgba(23, 32, 24, 0.16);
-    transition: transform 0.22s ease;
   }
 
-  /* Collapsed: slide down so only the handle and header stay on screen.
-   * `--sheet-hidden` is set from main.ts, because the height of the part being
-   * hidden is only known at runtime. */
-  .panel.collapsed {
-    transform: translateY(var(--sheet-hidden, 60%));
+  /* Collapsed: hide only the list and the attribution, keeping the header and
+   * the controls reachable.
+   *
+   * Sliding the whole sheet down relied on a pixel offset measured at collapse
+   * time, so it broke as soon as the result count changed the panel's height:
+   * with the filter at 500 m the panel shrank from 557 px to 335 px while the
+   * offset stayed at 472 px, pushing the sheet 137 px off screen and taking the
+   * handle with it. Hiding content needs no measurement and cannot drift. */
+  .panel.collapsed .results,
+  .panel.collapsed > footer {
+    display: none;
   }
 
   .sheet-handle {
