@@ -1,0 +1,281 @@
+/**
+ * App wiring: draws whatever boardwalks are in view, renders the list.
+ *
+ * The interesting logic lives in boardwalks.ts (grouping) and dataset.ts
+ * (loading and viewport filtering). This file is mostly DOM plumbing.
+ */
+
+import "./styles.css";
+
+import { CONFIDENCE_LABELS, groupWays, parseWays } from "./boardwalks.js";
+import { DEFAULT_MIN_LENGTH_M, MAX_LIST_ITEMS, MIN_ZOOM_FOR_RESULTS } from "./config.js";
+import { type Dataset, loadDataset, SearchError, waysInBounds } from "./dataset.js";
+import { formatDistance } from "./geo.js";
+import { BoardwalkMap } from "./map.js";
+import type { Group } from "./types.js";
+
+/** Everything the UI needs to know. */
+const state = {
+  minLengthM: DEFAULT_MIN_LENGTH_M,
+  /** Loaded once, then reused for every redraw. */
+  dataset: null as Dataset | null,
+  /** All groups in view, before the minimum-length filter. */
+  groups: [] as Group[],
+  /** Groups currently shown, after the filter. */
+  visible: [] as Group[],
+  selectedId: null as string | null,
+  /** Lets us drop a load that a newer one has replaced. */
+  inFlight: null as AbortController | null,
+};
+
+const el = {
+  locate: byId<HTMLButtonElement>("locateButton"),
+  minLength: byId<HTMLSelectElement>("minLengthSelect"),
+  status: byId<HTMLParagraphElement>("status"),
+  results: byId<HTMLOListElement>("results"),
+  mapBusy: byId<HTMLDivElement>("mapBusy"),
+  zoomHint: byId<HTMLDivElement>("zoomHint"),
+};
+
+function byId<T extends HTMLElement>(id: string): T {
+  const found = document.getElementById(id);
+  if (!found) throw new Error(`Missing element #${id}`);
+  return found as T;
+}
+
+const map = new BoardwalkMap("map", {
+  onViewChange: () => void refresh(),
+  onGroupClick: (id) => select(id, false),
+});
+
+el.locate.addEventListener("click", () => void locate());
+
+el.minLength.addEventListener("change", () => {
+  state.minLengthM = Number(el.minLength.value);
+  applyFilter();
+  reportCount();
+});
+
+// Draw whatever is in the initial view.
+void refresh();
+
+/** Asks the browser for the user's position and moves there. */
+async function locate(): Promise<void> {
+  if (!navigator.geolocation) {
+    setStatus("Dieser Browser kann den Standort nicht bestimmen.", "error");
+    return;
+  }
+
+  el.locate.disabled = true;
+  setStatus("Warte auf Standortfreigabe …", "busy");
+
+  try {
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 12_000,
+        maximumAge: 120_000,
+      });
+    });
+
+    // moveTo triggers a moveend, which redraws for the new view.
+    map.moveTo(
+      { lat: position.coords.latitude, lon: position.coords.longitude },
+      Math.max(map.zoom, 13),
+    );
+  } catch {
+    setStatus("Standort nicht verfügbar. Karte verschieben oder hineinzoomen.", "error");
+  } finally {
+    el.locate.disabled = false;
+  }
+}
+
+/**
+ * Redraws for the current viewport.
+ *
+ * Called on every pan and zoom. The dataset is fetched on the first call and
+ * kept, so later calls are pure computation — measured at about 20 ms.
+ */
+async function refresh(): Promise<void> {
+  if (map.zoom < MIN_ZOOM_FOR_RESULTS) {
+    state.groups = [];
+    state.selectedId = null;
+    applyFilter();
+    el.zoomHint.hidden = false;
+    setStatus("Hineinzoomen, um Bohlenwege zu sehen.");
+    return;
+  }
+
+  el.zoomHint.hidden = true;
+
+  if (!state.dataset) {
+    state.inFlight?.abort();
+    const controller = new AbortController();
+    state.inFlight = controller;
+
+    el.mapBusy.hidden = false;
+    setStatus("Lade Wegedaten …", "busy");
+
+    try {
+      state.dataset = await loadDataset(controller.signal);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+
+      const message =
+        error instanceof SearchError ? error.message : "Die Suche ist fehlgeschlagen.";
+      setStatus(message, "error", error instanceof SearchError && error.retryable);
+      return;
+    } finally {
+      if (state.inFlight === controller) {
+        el.mapBusy.hidden = true;
+        state.inFlight = null;
+      }
+    }
+  }
+
+  const inView = waysInBounds(state.dataset, map.bounds);
+  state.groups = groupWays(parseWays(inView));
+  applyFilter();
+  reportCount();
+}
+
+/** Applies the minimum-length filter and redraws. */
+function applyFilter(): void {
+  state.visible = state.groups.filter((group) => group.lengthM >= state.minLengthM);
+
+  // Forget a selection that is no longer on screen, whether the filter hid it or
+  // the map moved away from it.
+  if (!state.visible.some((group) => group.id === state.selectedId)) {
+    state.selectedId = null;
+  }
+
+  map.draw(state.visible);
+  // draw() rebuilt the layers, so the highlight has to be reapplied.
+  if (state.selectedId) map.select(state.selectedId);
+  render();
+}
+
+function select(groupId: string, zoomTo: boolean): void {
+  state.selectedId = groupId;
+  map.select(groupId, zoomTo);
+  render();
+}
+
+/** Renders the result list. */
+function render(): void {
+  el.results.replaceChildren();
+
+  if (state.visible.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent =
+      map.zoom < MIN_ZOOM_FOR_RESULTS
+        ? "Noch zu weit herausgezoomt."
+        : "Hier sind keine Bohlenwege verzeichnet.";
+    el.results.append(empty);
+    return;
+  }
+
+  // Cap the list. Berlin at zoom 10 with no length filter yields 837 groups,
+  // which took 79 ms to lay out and is not something anyone scrolls through.
+  // The map still draws all of them; this only limits the sidebar.
+  const shown = state.visible.slice(0, MAX_LIST_ITEMS);
+  shown.forEach((group, index) => {
+    el.results.append(resultCard(group, index));
+  });
+
+  if (state.visible.length > shown.length) {
+    const more = document.createElement("li");
+    more.className = "empty";
+    more.textContent = `… und ${state.visible.length - shown.length} weitere. Hineinzoomen oder Mindestlänge erhöhen.`;
+    el.results.append(more);
+  }
+}
+
+/**
+ * Builds one result card.
+ *
+ * Built with createElement and textContent rather than innerHTML, so OSM names
+ * can never be interpreted as HTML.
+ */
+function resultCard(group: Group, index: number): HTMLLIElement {
+  const item = document.createElement("li");
+  item.className = "card";
+  if (group.id === state.selectedId) item.classList.add("selected");
+
+  // A real button, so it works with keyboard and screen readers.
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "card-body";
+  button.addEventListener("click", () => select(group.id, true));
+
+  const top = document.createElement("span");
+  top.className = "card-top";
+  top.append(
+    span("card-title", `${index + 1}. ${group.title}`),
+    span("card-length", formatDistance(group.lengthM)),
+  );
+
+  const meta = document.createElement("span");
+  meta.className = "card-meta";
+  meta.append(
+    span(`pill ${group.confidence}`, CONFIDENCE_LABELS[group.confidence]),
+    span("pill", `${group.ways.length} Abschnitt${group.ways.length === 1 ? "" : "e"}`),
+  );
+
+  const tags = document.createElement("span");
+  tags.className = "card-tags";
+  for (const tag of group.tagSummary) tags.append(span("tag", tag));
+
+  button.append(top, meta, tags);
+
+  const link = document.createElement("a");
+  link.className = "card-link";
+  link.href = `https://www.openstreetmap.org/way/${group.ways[0]?.id}`;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "In OpenStreetMap ansehen";
+
+  item.append(button, link);
+  return item;
+}
+
+function span(className: string, text: string): HTMLSpanElement {
+  const node = document.createElement("span");
+  node.className = className;
+  node.textContent = text;
+  return node;
+}
+
+function setStatus(
+  message: string,
+  kind: "" | "busy" | "error" = "",
+  retry = false,
+): void {
+  el.status.className = `status ${kind}`;
+  el.status.textContent = message;
+
+  if (retry) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "retry";
+    button.textContent = "Erneut versuchen";
+    button.addEventListener("click", () => void refresh());
+    el.status.append(" ", button);
+  }
+}
+
+/** Puts the current result count into the status line. */
+function reportCount(): void {
+  if (map.zoom < MIN_ZOOM_FOR_RESULTS) {
+    setStatus("Hineinzoomen, um Bohlenwege zu sehen.");
+  } else if (state.visible.length > 0) {
+    const longest = formatDistance(Math.max(...state.visible.map((g) => g.lengthM)));
+    const label = state.visible.length === 1 ? "Bohlenweg" : "Bohlenwege";
+    setStatus(`${state.visible.length} ${label}, längster ${longest}.`);
+  } else if (state.groups.length > 0) {
+    setStatus("Keine Treffer über der Mindestlänge. Mindestlänge verringern.");
+  } else {
+    setStatus("Hier sind keine Bohlenwege verzeichnet.");
+  }
+}

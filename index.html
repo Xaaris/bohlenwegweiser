@@ -1,90 +1,71 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bohlenwegweiser</title>
+    <meta
+      name="description"
+      content="Finde Bohlenwege, Moorstege und Holzstege in deiner Umgebung, auf Basis von OpenStreetMap."
+    />
+    <meta name="theme-color" content="#315f49" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23315f49'/%3E%3Cpath d='M16 20h32M16 32h32M16 44h32' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E"
-    >
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
-    >
-    <link rel="stylesheet" href="styles.css">
+    />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="panel" aria-label="Search controls and results">
-        <header class="brand">
-          <div>
-            <p class="eyebrow">OSM boardwalk finder</p>
-            <h1>Bohlenwegweiser</h1>
-          </div>
+    <div class="shell">
+      <main class="map-wrap">
+        <div id="map"></div>
+        <!-- aria-hidden on both: the status line already says the same thing. -->
+        <div id="mapBusy" class="map-busy" aria-hidden="true" hidden>
+          Lade Wegedaten …
+        </div>
+        <div id="zoomHint" class="zoom-hint" aria-hidden="true" hidden>
+          Hineinzoomen, um Bohlenwege zu sehen
+        </div>
+      </main>
+
+      <aside class="panel">
+        <header>
+          <h1>Bohlenwegweiser</h1>
+          <p id="status" class="status" role="status" aria-live="polite">
+            Karte verschieben oder hineinzoomen.
+          </p>
         </header>
 
-        <section class="controls" aria-label="Search">
-          <div class="button-row">
-            <button class="locate-action" id="locateButton" type="button">Locate me</button>
-            <button class="primary search-action" id="searchButton" type="button">Search here</button>
-          </div>
+        <div class="controls">
+          <button id="locateButton" type="button">Mein Standort</button>
+          <label>
+            <span>ab</span>
+            <select id="minLengthSelect">
+              <option value="0">alle Längen</option>
+              <option value="25">25 m</option>
+              <option value="50" selected>50 m</option>
+              <option value="100">100 m</option>
+              <option value="200">200 m</option>
+              <option value="500">500 m</option>
+            </select>
+          </label>
+        </div>
 
-          <div class="field-grid">
-            <label>
-              <span>Radius</span>
-              <select id="radiusSelect">
-                <option value="2000">2 km</option>
-                <option value="5000">5 km</option>
-                <option value="10000" selected>10 km</option>
-                <option value="25000">25 km</option>
-                <option value="50000">50 km</option>
-              </select>
-            </label>
+        <ol id="results" class="results"></ol>
 
-            <label>
-              <span>Minimum length</span>
-              <select id="minLengthSelect">
-                <option value="25">25 m</option>
-                <option value="50" selected>50 m</option>
-                <option value="100">100 m</option>
-                <option value="200">200 m</option>
-                <option value="500">500 m</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="status" id="status" role="status">
-            Select a place on the map or use your location.
-          </div>
-        </section>
-
-        <section class="summary" aria-label="Search summary">
-          <div>
-            <span class="metric" id="resultCount">0</span>
-            <span class="metric-label">matches</span>
-          </div>
-          <div>
-            <span class="metric" id="longestLength">0 m</span>
-            <span class="metric-label">longest</span>
-          </div>
-        </section>
-
-        <section class="results" aria-label="Results">
-          <ol id="resultsList" class="results-list"></ol>
-        </section>
+        <footer>
+          Daten von
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noopener noreferrer"
+            >OpenStreetMap</a
+          >
+          (ODbL). Ob ein Weg wirklich ein Bohlenweg ist, wird anhand der OSM-Tags
+          geschätzt und kann falsch sein.
+        </footer>
       </aside>
-
-      <main class="map-wrap">
-        <div id="map" aria-label="Map"></div>
-        <div class="map-crosshair" aria-hidden="true"></div>
-        <button class="map-search-button" id="mapSearchButton" type="button" hidden>
-          Search this area
-        </button>
-      </main>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

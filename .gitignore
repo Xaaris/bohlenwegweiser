@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+
+.idea/
+.vscode/
+.DS_Store
+
+# Playwright MCP scratch output (screenshots, snapshots, console logs)
+.playwright-mcp/
+
+*.log
+npm-debug.log*
+
+.env
+.env.*
+!.env.example

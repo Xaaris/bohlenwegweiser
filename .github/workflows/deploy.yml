@@ -1,0 +1,60 @@
+# Builds the site and publishes it to GitHub Pages.
+#
+# Runs on every push to main, and manually from the Actions tab.
+#
+# The dataset (public/boardwalks.json) is committed to the repository and gets
+# built along with everything else; this workflow does not regenerate it. To
+# refresh it, run `npm run data` locally and commit the result.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required by Pages; id-token is used to authenticate the deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Queue deployments rather than cancelling a running one, so the published site
+# is never left half-updated.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # 24 is the current LTS. Local development runs 26, which works too,
+          # but the dependencies declare support for even-numbered LTS releases
+          # (vitest asks for ^20 || ^22 || >=24), so CI stays on the safer one.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Type-check, lint and test. Nothing is published if this fails.
+      - run: npm run check
+
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
