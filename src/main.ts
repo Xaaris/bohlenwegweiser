@@ -35,6 +35,10 @@ const el = {
   results: byId<HTMLOListElement>("results"),
   mapBusy: byId<HTMLDivElement>("mapBusy"),
   zoomHint: byId<HTMLDivElement>("zoomHint"),
+  panel: document.querySelector<HTMLElement>(".panel"),
+  sheetToggle: byId<HTMLButtonElement>("sheetToggle"),
+  sheetLabel: document.querySelector<HTMLElement>(".sheet-label"),
+  footer: document.querySelector<HTMLElement>(".panel > footer"),
 };
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -50,11 +54,47 @@ const map = new BoardwalkMap("map", {
 
 el.locate.addEventListener("click", () => void locate());
 
+el.sheetToggle.addEventListener("click", () => toggleSheet());
+
 el.minLength.addEventListener("change", () => {
   state.minLengthM = Number(el.minLength.value);
   applyFilter();
   reportCount();
 });
+
+/**
+ * Collapses the sheet to just its handle and header, or opens it again.
+ *
+ * The distance to slide is measured rather than hard-coded, because it depends
+ * on the height of the controls, the list and the viewport.
+ */
+function toggleSheet(collapse = !isCollapsed()): void {
+  const panel = el.panel;
+  if (!panel) return;
+
+  if (collapse) {
+    const header = panel.querySelector("header");
+    const keepVisible =
+      el.sheetToggle.getBoundingClientRect().height +
+      (header?.getBoundingClientRect().height ?? 0);
+    const hide = panel.getBoundingClientRect().height - keepVisible;
+    panel.style.setProperty("--sheet-hidden", `${Math.max(0, Math.round(hide))}px`);
+  }
+
+  panel.classList.toggle("collapsed", collapse);
+  el.sheetToggle.setAttribute("aria-expanded", String(!collapse));
+  if (el.sheetLabel) {
+    el.sheetLabel.textContent = collapse ? "Liste anzeigen" : "Liste einklappen";
+  }
+
+  // Leaflet needs to know the visible area changed, or clicks land in the wrong
+  // place after the sheet moves.
+  map.invalidateSize();
+}
+
+function isCollapsed(): boolean {
+  return el.panel?.classList.contains("collapsed") ?? false;
+}
 
 // Draw whatever is in the initial view.
 void refresh();
@@ -173,6 +213,7 @@ function render(): void {
         ? "Noch zu weit herausgezoomt."
         : "Hier sind keine Bohlenwege verzeichnet.";
     el.results.append(empty);
+    appendAttribution();
     return;
   }
 
@@ -190,6 +231,29 @@ function render(): void {
     more.textContent = `… und ${state.visible.length - shown.length} weitere. Hineinzoomen oder Mindestlänge erhöhen.`;
     el.results.append(more);
   }
+
+  appendAttribution();
+}
+
+/**
+ * On narrow screens the ODbL attribution goes at the end of the list.
+ *
+ * As a fixed footer it took 77 px of a 506 px panel on a 390x844 screen, which
+ * is a lot for something nobody needs in view at all times. It is still there,
+ * just at the bottom of the scroll.
+ */
+function appendAttribution(): void {
+  if (!el.footer || !isNarrow()) return;
+
+  const item = document.createElement("li");
+  item.className = "attribution";
+  // Cloned so the desktop footer keeps working when the viewport widens again.
+  item.append(...[...el.footer.cloneNode(true).childNodes]);
+  el.results.append(item);
+}
+
+function isNarrow(): boolean {
+  return window.matchMedia("(max-width: 820px)").matches;
 }
 
 /**

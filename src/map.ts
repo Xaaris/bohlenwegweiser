@@ -64,6 +64,11 @@ export class BoardwalkMap {
     };
   }
 
+  /** Tells Leaflet the container size changed, e.g. after the sheet moved. */
+  invalidateSize(): void {
+    this.map.invalidateSize();
+  }
+
   /** Moves the view; the resulting moveend triggers a redraw. */
   moveTo(point: Point, zoom = this.map.getZoom()): void {
     this.map.setView([point.lat, point.lon], zoom);

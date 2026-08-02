@@ -52,6 +52,11 @@ body {
   background: var(--panel);
 }
 
+/* The drag handle is a mobile-only affordance. */
+.sheet-handle {
+  display: none;
+}
+
 /* Header: title and status together.
  *
  * Tinted background and a bottom border so it reads as a header rather than the
@@ -375,28 +380,108 @@ select {
   display: none;
 }
 
+/* --- Narrow screens ---
+ *
+ * The panel becomes a sheet over the map rather than a block below it. Measured
+ * before: the map got 40% of a 390x844 screen, the list 272 px, and the
+ * attribution footer permanently took 77 px. Now the map fills the screen and
+ * the sheet can be collapsed to its header, which is the point of the handle. */
+
 @media (max-width: 820px) {
-  /* Stacked: map on top, controls below.
-   *
-   * The panel keeps its own scroll area instead of letting the page grow: with
-   * `overflow: visible` the document reached 2125 px at just 7 results, so the
-   * map was scrolled far out of view. Tapping a result then zoomed the map
-   * (measured 1172 px above the viewport) with nothing visible happening. */
   .shell {
-    grid-template-areas:
-      "map"
-      "panel";
-    grid-template-columns: 1fr;
-    grid-template-rows: 40dvh 1fr;
+    display: block;
     height: 100dvh;
   }
 
-  #map {
-    height: 100%;
+  .map-wrap {
+    position: absolute;
+    inset: 0;
   }
 
   .panel {
-    border-right: 0;
+    position: absolute;
+    z-index: 600;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    /* Two thirds at most, so a good part of the map stays visible. */
+    max-height: 66dvh;
     border-top: 1px solid var(--line);
+    border-right: 0;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -6px 24px rgba(23, 32, 24, 0.16);
+    transition: transform 0.22s ease;
+  }
+
+  /* Collapsed: slide down so only the handle and header stay on screen.
+   * `--sheet-hidden` is set from main.ts, because the height of the part being
+   * hidden is only known at runtime. */
+  .panel.collapsed {
+    transform: translateY(var(--sheet-hidden, 60%));
+  }
+
+  .sheet-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 16px 16px 0 0;
+    padding: 9px 0 5px;
+    background: var(--paper);
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  .sheet-grip {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+
+  .panel header {
+    padding: 4px 18px 12px;
+  }
+
+  .panel h1 {
+    font-size: 1.35rem;
+  }
+
+  .controls {
+    padding: 12px 18px;
+  }
+
+  .results {
+    padding: 12px;
+  }
+
+  /* The attribution is required, but it does not need to be on screen at all
+   * times: it used to take 77 px of a 506 px panel. main.ts moves the footer to
+   * the end of the scrolling list on narrow screens, so it is reached by
+   * scrolling down rather than always visible. */
+  .panel > footer {
+    display: none;
+  }
+
+  .results > .attribution {
+    margin-top: 4px;
+    padding: 10px 4px 2px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.45;
+  }
+
+  .results > .attribution a {
+    color: var(--teal);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    transition: none;
   }
 }

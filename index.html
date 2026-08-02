@@ -28,6 +28,12 @@
       </main>
 
       <aside class="panel">
+        <!-- Only shown on narrow screens; see the media query in styles.css. -->
+        <button id="sheetToggle" class="sheet-handle" type="button" aria-expanded="true">
+          <span class="sheet-grip" aria-hidden="true"></span>
+          <span class="sheet-label">Liste einklappen</span>
+        </button>
+
         <header>
           <h1>Bohlenwegweiser</h1>
           <p id="status" class="status" role="status" aria-live="polite">

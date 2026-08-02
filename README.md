@@ -43,7 +43,7 @@ npm run data          # or: go run ./tools/build-dataset
 
 This queries Overpass once for the whole of Germany and rewrites
 `public/boardwalks.json`. It takes one to two minutes; Overpass is doing real
-work. Run it whenever you want fresh data — there is no scheduled job.
+work. Run it whenever you want fresh data — there is no scheduled job yet.
 
 Useful flags while working on the builder:
 
@@ -83,22 +83,20 @@ instances are shared and their load is unpredictable. Racing two mirrors helped
 but did not fix it.
 
 All boardwalk candidates in Germany come to 48,000 ways, which is 1.3 MB
-gzipped — small enough to ship as a static file. Measured after the change:
-0.2 s for the first view including the download, then about 20 ms per redraw.
+gzipped — small enough to ship as a static file.
 
 The dataset is as old as the last rebuild. For boardwalks that is fine.
 
 ### Viewport rendering
 
-There is no search radius and no search button. Every pan and zoom redraws
-whatever falls inside the visible area, which is cheap once the dataset is in
-memory.
+Every pan and zoom redraws whatever falls inside the visible area, which 
+is cheap once the dataset is in memory.
 
-Below zoom 10 nothing is drawn and the map says so
-(`MIN_ZOOM_FOR_RESULTS` in `src/config.ts`). Measured at zoom 10 over Berlin
-with the length filter off: 148 groups with the default filter, 837 without.
-Further out it would be all 48,000, which is both slow and unreadable — the
-lines overlap into noise.
+Below zoom 9 nothing is drawn and the map says so (`MIN_ZOOM_FOR_RESULTS` in
+`src/config.ts`).
+
+So 9 is the lowest level that still pans smoothly. Further out the lines also
+overlap into noise, which makes them useless to look at anyway.
 
 The sidebar list is capped at 50 entries (`MAX_LIST_ITEMS`) with a note about
 how many more there are; the map still draws all of them. Without the cap,

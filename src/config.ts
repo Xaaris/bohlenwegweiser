@@ -22,12 +22,16 @@ export const DEFAULT_MIN_LENGTH_M = 50;
 /**
  * Below this zoom level nothing is drawn.
  *
- * At zoom 10 the viewport covers roughly 80 km. Measured worst case (Berlin,
- * no length filter): 148 groups with the default filter, 837 without. Zoomed
- * further out it would be all 48,000 — slow to draw and useless to look at,
- * since the lines overlap into noise.
+ * Measured over Hamburg, the densest area, drawing every way in view:
+ *
+ *   zoom 10:  291 lines, no blocking
+ *   zoom  9:  741 lines, no blocking
+ *   zoom  8: 2559 lines, an 87 ms task that stalls the UI
+ *
+ * So 9 is the lowest level that still pans smoothly. Further out the lines also
+ * overlap into noise, which makes them useless to look at anyway.
  */
-export const MIN_ZOOM_FOR_RESULTS = 10;
+export const MIN_ZOOM_FOR_RESULTS = 9;
 
 /** OSM highway values that can plausibly be a boardwalk. */
 export const RELEVANT_HIGHWAYS = [
