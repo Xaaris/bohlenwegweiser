@@ -69,9 +69,29 @@ export class BoardwalkMap {
     this.map.invalidateSize();
   }
 
-  /** Moves the view; the resulting moveend triggers a redraw. */
-  moveTo(point: Point, zoom = this.map.getZoom()): void {
-    this.map.setView([point.lat, point.lon], zoom);
+  /**
+   * Moves the view; the resulting moveend triggers a redraw.
+   *
+   * `offsetY` shifts the target up by that many pixels, so a point can be
+   * centred in the part of the map that is actually visible. On narrow screens
+   * the bottom sheet covers the lower half: without this, locating put the
+   * position at y=422 while the sheet started at y=287, hiding all 19 drawn
+   * lines and making the button look broken.
+   */
+  moveTo(point: Point, zoom = this.map.getZoom(), offsetY = 0): void {
+    const target = L.latLng(point.lat, point.lon);
+
+    if (offsetY === 0) {
+      this.map.setView(target, zoom);
+      return;
+    }
+
+    // Convert to pixels at the target zoom, shift, and convert back.
+    const shifted = this.map.unproject(
+      this.map.project(target, zoom).add([0, offsetY / 2]),
+      zoom,
+    );
+    this.map.setView(shifted, zoom);
   }
 
   fitTo(bounds: Bounds, maxZoom = 15): void {

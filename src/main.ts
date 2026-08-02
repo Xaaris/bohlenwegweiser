@@ -112,9 +112,9 @@ async function locate(): Promise<void> {
   try {
     const position = await new Promise<GeolocationPosition>((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 12_000,
-        maximumAge: 120_000,
+        enableHighAccuracy: false,
+        timeout: 20_000,
+        maximumAge: 300_000,
       });
     });
 
@@ -122,11 +122,45 @@ async function locate(): Promise<void> {
     map.moveTo(
       { lat: position.coords.latitude, lon: position.coords.longitude },
       Math.max(map.zoom, 13),
+      hiddenMapHeight(),
     );
-  } catch {
-    setStatus("Standort nicht verfügbar. Karte verschieben oder hineinzoomen.", "error");
+  } catch (error) {
+    setStatus(locationErrorMessage(error), "error");
   } finally {
     el.locate.disabled = false;
+  }
+}
+
+/**
+ * How much of the map the bottom sheet covers, in pixels.
+ *
+ * Zero on wide screens, where the panel sits beside the map instead of over it.
+ */
+function hiddenMapHeight(): number {
+  if (!isNarrow() || !el.panel || isCollapsed()) return 0;
+
+  const covered = window.innerHeight - el.panel.getBoundingClientRect().top;
+  return Math.max(0, Math.round(covered));
+}
+
+/**
+ * Turns a GeolocationPositionError into something actionable.
+ *
+ * All three causes used to produce "Standort nicht verfügbar", which gave no
+ * hint that the usual fix is in the browser's own settings.
+ */
+function locationErrorMessage(error: unknown): string {
+  const code = (error as GeolocationPositionError | undefined)?.code;
+
+  switch (code) {
+    case 1: // PERMISSION_DENIED
+      return "Standortzugriff ist blockiert. In den Browser-Einstellungen für diese Seite erlauben.";
+    case 2: // POSITION_UNAVAILABLE
+      return "Standort ließ sich nicht bestimmen. Ortungsdienste prüfen.";
+    case 3: // TIMEOUT
+      return "Standortabfrage hat zu lange gedauert. Noch einmal versuchen.";
+    default:
+      return "Standort nicht verfügbar. Karte verschieben oder hineinzoomen.";
   }
 }
 
