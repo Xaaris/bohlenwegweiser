@@ -62,7 +62,6 @@ body {
   background: var(--panel);
 }
 
-/* The drag handle is a mobile-only affordance. */
 .sheet-handle {
   display: none;
 }
@@ -448,13 +447,6 @@ select {
     color: var(--muted);
     font-size: 0.74rem;
     font-weight: 700;
-  }
-
-  .sheet-grip {
-    width: 36px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--line);
   }
 
   .panel header {
