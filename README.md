@@ -116,6 +116,9 @@ ways.
 Every pan and zoom redraws whatever falls inside the visible area, which 
 is cheap once the dataset is in memory.
 
+Outside the covered region the app says so instead of "no boardwalks here" —
+that would claim OSM has none, when really the dataset just stops at the border.
+
 Below zoom 9 nothing is drawn and the map says so (`MIN_ZOOM_FOR_RESULTS` in
 `src/config.ts`). Measured over Hamburg, the densest area:
 
@@ -155,8 +158,8 @@ just 10 m long. `groupWays` merges ways that touch (endpoints within 20 m) and
 look like the same path. Differently named ways are never merged, even where
 they meet.
 
-Only ways whose endpoints fall into the same grid cell are compared, so a large
-radius returning thousands of ways stays fast.
+Only ways whose endpoints fall into the same grid cell are compared, so a wide
+viewport containing thousands of ways stays fast.
 
 
 ## Deploying

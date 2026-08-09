@@ -14,7 +14,13 @@ import {
   MIN_LENGTH_M,
   MIN_ZOOM_FOR_RESULTS,
 } from "./config.js";
-import { type Dataset, loadDataset, SearchError, waysInBounds } from "./dataset.js";
+import {
+  type Dataset,
+  isCovered,
+  loadDataset,
+  SearchError,
+  waysInBounds,
+} from "./dataset.js";
 import { formatDistance } from "./geo.js";
 import { BoardwalkMap } from "./map.js";
 import type { Group } from "./types.js";
@@ -169,7 +175,7 @@ async function refresh(): Promise<void> {
     state.selectedId = null;
     applyFilter();
     el.zoomHint.hidden = false;
-    setStatus("Hineinzoomen, um Bohlenwege zu sehen.");
+    reportCount();
     return;
   }
 
@@ -235,10 +241,7 @@ function render(): void {
   if (state.visible.length === 0) {
     const empty = document.createElement("li");
     empty.className = "empty";
-    empty.textContent =
-      map.zoom < MIN_ZOOM_FOR_RESULTS
-        ? "Noch zu weit herausgezoomt."
-        : "Hier sind keine Bohlenwege verzeichnet.";
+    empty.textContent = emptyReason();
     el.results.append(empty);
     appendAttribution();
     return;
@@ -353,17 +356,32 @@ function setStatus(
   }
 }
 
+/**
+ * Why there is nothing to show. Shared by the list and the status line so the
+ * two cannot contradict each other.
+ */
+function emptyReason(): string {
+  if (map.zoom < MIN_ZOOM_FOR_RESULTS) {
+    return "Hineinzoomen, um Bohlenwege zu sehen.";
+  }
+  if (state.groups.length > 0) {
+    return "Keine Treffer über der Mindestlänge. Mindestlänge verringern.";
+  }
+  if (state.dataset && !isCovered(state.dataset, map.center)) {
+    // Outside the dataset's region there is nothing to say about boardwalks, so
+    // "none here" would claim more than we know.
+    return "Dieser Bereich liegt außerhalb der Daten (nur Deutschland).";
+  }
+  return "Hier sind keine Bohlenwege verzeichnet.";
+}
+
 /** Puts the current result count into the status line. */
 function reportCount(): void {
-  if (map.zoom < MIN_ZOOM_FOR_RESULTS) {
-    setStatus("Hineinzoomen, um Bohlenwege zu sehen.");
-  } else if (state.visible.length > 0) {
+  if (state.visible.length > 0) {
     const longest = formatDistance(Math.max(...state.visible.map((g) => g.lengthM)));
     const label = state.visible.length === 1 ? "Bohlenweg" : "Bohlenwege";
     setStatus(`${state.visible.length} ${label}, längster ${longest}.`);
-  } else if (state.groups.length > 0) {
-    setStatus("Keine Treffer über der Mindestlänge. Mindestlänge verringern.");
   } else {
-    setStatus("Hier sind keine Bohlenwege verzeichnet.");
+    setStatus(emptyReason());
   }
 }

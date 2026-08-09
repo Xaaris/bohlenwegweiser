@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  boundsOf,
-  distance,
-  distanceToLine,
-  formatDistance,
-  lineLength,
-} from "../src/geo.js";
+import { boundsOf, distance, formatDistance, lineLength } from "../src/geo.js";
 
 describe("distance", () => {
   it("is zero for the same point", () => {
@@ -39,31 +33,6 @@ describe("lineLength", () => {
       { lat: 53.002, lon: 8 },
     ];
     expect(lineLength(points)).toBeCloseTo(distance(points[0]!, points[1]!) * 2, 3);
-  });
-});
-
-describe("distanceToLine", () => {
-  it("measures against the segment, not just the corners", () => {
-    // A long east-west line with the point just north of its middle.
-    const line = [
-      { lat: 53, lon: 8 },
-      { lat: 53, lon: 8.1 },
-    ];
-    const point = { lat: 53.001, lon: 8.05 };
-
-    // About 111 m from the line, while both corners are kilometres away.
-    expect(distanceToLine(point, line)).toBeGreaterThan(100);
-    expect(distanceToLine(point, line)).toBeLessThan(125);
-  });
-
-  it("is zero when the point lies on the line", () => {
-    const point = { lat: 53, lon: 8 };
-    expect(distanceToLine(point, [point, { lat: 53.01, lon: 8 }])).toBeCloseTo(0, 6);
-  });
-
-  it("handles empty and single-point lines", () => {
-    expect(distanceToLine({ lat: 53, lon: 8 }, [])).toBe(Number.POSITIVE_INFINITY);
-    expect(distanceToLine({ lat: 53, lon: 8 }, [{ lat: 53, lon: 8 }])).toBe(0);
   });
 });
 

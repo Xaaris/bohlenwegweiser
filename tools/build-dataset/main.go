@@ -36,9 +36,8 @@ import (
 	"time"
 )
 
-// Germany, generously bounded. Widen this to cover more countries; the only
-// other place that assumes a region is the "outside the dataset" message in the
-// UI.
+// Germany, generously bounded. Widen this to cover more countries; nothing else
+// assumes a region, but the dataset grows roughly with the area.
 var bbox = [4]float64{47.2, 5.8, 55.1, 15.1} // minLat, minLon, maxLat, maxLon
 
 // Tag/value pairs that on their own mark a way as a boardwalk.

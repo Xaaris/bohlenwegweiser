@@ -31,46 +31,6 @@ export function lineLength(points: Point[]): number {
   return total;
 }
 
-/**
- * Shortest distance from a point to a polyline, in metres.
- *
- * Measures against each segment, not just the corner points, so a long straight
- * segment passing nearby is reported correctly.
- */
-export function distanceToLine(from: Point, points: Point[]): number {
-  if (points.length === 0) return Number.POSITIVE_INFINITY;
-  if (points.length === 1) return distance(from, points[0] as Point);
-
-  let min = Number.POSITIVE_INFINITY;
-  for (let i = 1; i < points.length; i++) {
-    const d = distanceToSegment(from, points[i - 1] as Point, points[i] as Point);
-    if (d < min) min = d;
-  }
-  return min;
-}
-
-/** Distance from `p` to the segment `a`-`b`, in metres. */
-function distanceToSegment(p: Point, a: Point, b: Point): number {
-  // Project onto a flat plane centred on `p`. Fine over short distances.
-  const cosLat = Math.cos(p.lat * DEG);
-  const toXY = (q: Point) => ({
-    x: (q.lon - p.lon) * DEG * cosLat * EARTH_RADIUS_M,
-    y: (q.lat - p.lat) * DEG * EARTH_RADIUS_M,
-  });
-
-  const pa = toXY(a);
-  const pb = toXY(b);
-  const dx = pb.x - pa.x;
-  const dy = pb.y - pa.y;
-  const lengthSq = dx * dx + dy * dy;
-
-  if (lengthSq === 0) return distance(p, a);
-
-  // How far along the segment the closest point lies, clamped to its ends.
-  const t = Math.max(0, Math.min(1, (-pa.x * dx - pa.y * dy) / lengthSq));
-  return Math.hypot(pa.x + t * dx, pa.y + t * dy);
-}
-
 /** Bounding box of some points. */
 export function boundsOf(points: Point[]): Bounds {
   let minLat = Number.POSITIVE_INFINITY;

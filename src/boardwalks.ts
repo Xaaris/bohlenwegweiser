@@ -4,7 +4,7 @@
  * Steps:
  *   1. parseWays   - filter to plausible boardwalks, measure each one
  *   2. groupWays   - merge ways that touch and look like the same path
- *   3. sort        - longest and most confident first
+ *   3. sort        - longest first
  */
 
 import { JOIN_DISTANCE_M, NAME_PATTERN, RELEVANT_HIGHWAYS } from "./config.js";
@@ -88,7 +88,7 @@ export function groupWays(ways: Way[]): Group[] {
  * Groups ways that are both adjacent and plausibly the same path.
  *
  * Only ways whose endpoints share a grid cell are compared, so this stays fast
- * even when a large radius returns thousands of ways.
+ * even when a wide viewport contains thousands of ways.
  */
 function connectedComponents(ways: Way[]): Way[][] {
   const cellSize = (JOIN_DISTANCE_M * 2) / 111_320; // degrees

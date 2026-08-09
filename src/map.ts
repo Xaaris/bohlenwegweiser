@@ -56,6 +56,12 @@ export class BoardwalkMap {
     return this.map.getZoom();
   }
 
+  /** Centre of the current view. */
+  get center(): Point {
+    const c = this.map.getCenter();
+    return { lat: c.lat, lon: c.lng };
+  }
+
   /** The currently visible area. */
   get bounds(): Bounds {
     const b = this.map.getBounds();
@@ -150,10 +156,5 @@ export class BoardwalkMap {
 
     const selected = groupId ? this.lines.get(groupId) : undefined;
     if (selected && zoomTo) this.fitTo(selected.group.bounds, 16);
-  }
-
-  clear(): void {
-    this.resultLayer.clearLayers();
-    this.lines.clear();
   }
 }
