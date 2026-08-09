@@ -91,7 +91,7 @@ instances are shared and their load is unpredictable. Racing two mirrors helped
 but did not fix it.
 
 All boardwalk candidates in Germany come to 51,000 ways. After dropping paths
-under 25 m the file holds 15,677 ways at 0.57 MB gzipped — small enough to ship
+under 25 m the file holds 15,687 ways at 0.57 MB gzipped — small enough to ship
 as a static file.
 
 The dataset is as old as the last rebuild. For boardwalks that is fine.
@@ -120,7 +120,7 @@ hand. Shipping the id instead:
 
 - removes the duplication — `connectedComponents`, `samePath` and `touches` now
   exist only in Go;
-- cuts the browser's grouping from 29 ms to 10 ms on the real 15,677 ways;
+- cuts the browser's grouping from 29 ms to 10 ms on the real 15,687 ways;
 - costs 25 KB gzipped, 4.5% of the file, measured by stripping the field from the
   same data and re-compressing.
 
@@ -144,7 +144,7 @@ length as the map moved and could split into two cards. Measured on
 reported 1590 m, and at one clipping it appeared as two entries. Since the length
 is the only sort key, the list order moved with the map too.
 
-The cost went the right way. Assembling all 15,677 ways into groups measures
+The cost went the right way. Assembling all 15,687 ways into groups measures
 10 ms, once, inside the loading indicator; the per-pan work drops from re-grouping
 (0.5 ms in a village, 1.4 ms over Hamburg) to a bounding-box test per group at
 0.1 ms. First load measured 95–119 ms before and about 167 ms after. The map draws
@@ -180,6 +180,11 @@ _Sicher_, _Wahrscheinlich_ or _Unsicher_:
 - `boardwalk=yes`, `footway=boardwalk`, `surface=boardwalk` → medium
 - only a matching name such as _Bohlenweg_ → low
 
+Three of those tags match almost nothing in Germany — `boardwalk=yes` and
+`footway=boardwalk` match zero ways, `surface=boardwalk` matches 4. They stay
+anyway: the covered region is one variable (`bbox`), and those tags are used
+elsewhere, so removing them would quietly break the first wider rebuild.
+
 Ways must also be a footpath (`highway=footway`, `path`, ...) or a
 `man_made=pier`, which filters out wooden driveways and terraces.
 
@@ -208,6 +213,37 @@ real file they dropped 0 of 15,256 ways — a second copy to keep in sync for no
 effect. It now only labels what the builder shipped. Across the whole dataset
 that is 15,665 high, 4 medium and 8 low — the 8 being the name-only ways with no
 surface tag.
+
+### Which names count
+
+Two lists drive the name half of the search, and they work differently:
+
+- `boardwalkNames` builds the Overpass query and matches names **exactly**
+- `nameFragments` filters the response and matches **substrings**
+
+So a word has to be in **both** to have any effect. The exact matching is not an
+oversight: `way["name"="Bohlenweg"]` uses an index, while a regex over all of
+Germany makes Overpass pick a far slower plan (1 s versus 30 s+). A way called
+_Holzbohlenweg_ is therefore never fetched by name, only by its tags.
+
+The rule for adding a word is that it must name the **structure**, not the
+setting. _Bohle_, _Bretter_, _Planke_, _Knüppel_ and _Steg_ describe planks, logs
+or a raised walkway. Words that only say where a path goes were measured and left
+out:
+
+| candidate  | ways in Germany | walkable, untagged | verdict |
+| ---------- | --------------- | ------------------ | ------- |
+| `Knüppelweg` | 33 | 8 | **added** — a corduroy road by definition |
+| `Plankenweg` | 10 | 3 | **added** — planks are in the name |
+| `Knüppelpfad` | 1 | 0 | **added** for symmetry; its one way was already in via `surface=wood` |
+| `Holzweg` | 973 | 72 | rejected — a timber haul road, and the idiom for the wrong track |
+| `Moorweg` | 884 | 51 | rejected — a path through a moor need not be planked |
+| `Moorpfad` | 7 | 2 | rejected — same reasoning |
+| `Stegweg` | 19 | 4 | rejected — a way *to* a Steg is not itself one |
+
+Adding the three words brought in 11 ways: 8 `Knüppelweg` and 3 `Plankenweg`.
+`Knüppelpfad` added none. _Bohlenstraße_ deliberately does not match — a
+_Straße_ is a street whatever it is called.
 
 ### Grouping
 

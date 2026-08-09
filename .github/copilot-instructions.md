@@ -13,14 +13,14 @@ dataset. Deployed to GitHub Pages at
 `src/types.ts` — read that file first.
 
 Key design decision: there is **no runtime Overpass query**. The whole German
-dataset (~0.57 MB gzipped, 15,677 ways) is fetched once and filtered in memory
+dataset (~0.57 MB gzipped, 15,687 ways) is fetched once and filtered in memory
 on every pan/zoom. Do not reintroduce per-search network calls.
 
 Second decision, easy to undo by accident: **grouping happens once, over the
 whole dataset**, and the viewport filter (`groupsInBounds`) runs on finished
 groups. Filtering ways first and then grouping rebuilt each group from whatever
 was on screen, so `way/18963200` reported 3219 m at full extent and 1590 m with
-half of it off screen, and sometimes appeared as two cards. Bucketing all 15,677
+half of it off screen, and sometimes appeared as two cards. Bucketing all 15,687
 ways by their group id costs 10 ms once; the box test per pan is 0.1 ms.
 
 ## Duplicated logic that must stay in sync
@@ -65,6 +65,11 @@ Two more copies that are *not* Go-related and get missed:
 - Line colours in `LINE_STYLES` (`src/map.ts`) are hard-coded hex because CSS
   variables aren't readable from JS. Keep them in step with the palette in
   `src/styles.css`.
+- `boardwalkNames` (exact, builds the query) and `nameFragments` (substring,
+  filters the response) in `main.go` are two halves of one rule: a new word needs
+  to be in **both** or it is either never fetched or fetched and discarded.
+  `TestNameListsAgree` guards this. Don't switch the query to `name~"..."` —
+  measured ~30x slower.
 - The `<option>` values of `#minLengthSelect` (`index.html`) are hand-written.
   The lowest one must equal `MIN_LENGTH_M`; `main.ts` clamps the value anyway so
   a stale option can't request data that isn't in the file.

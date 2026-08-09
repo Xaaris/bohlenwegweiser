@@ -47,6 +47,12 @@ var bbox = [4]float64{47.2, 5.8, 55.1, 15.1} // minLat, minLon, maxLat, maxLon
 //
 // confidenceOf() in src/boardwalks.ts grades the same tags into the labels the
 // UI shows, so a new pair usually wants a case there too.
+//
+// Three of these currently earn their keep only in principle: in Germany
+// `boardwalk=yes` and `footway=boardwalk` match zero ways and `surface=boardwalk`
+// matches 4. They stay because the region is a single variable (`bbox` below) and
+// those tags are used elsewhere — deleting them would quietly break the first
+// rebuild that widens the area.
 var boardwalkTags = []struct{ Key, Value string }{
 	{"surface", "wood"},
 	{"bridge", "boardwalk"},
@@ -56,18 +62,42 @@ var boardwalkTags = []struct{ Key, Value string }{
 }
 
 // Ways whose name alone suggests a boardwalk, even without telling tags.
-// Exact matches are indexed by Overpass; a regex over all of Germany is not.
+//
+// Matched **exactly**, because that is what Overpass indexes: `way["name"="X"]`
+// is fast, while a regex over all of Germany makes the planner pick a far slower
+// route (measured: 1 s versus 30 s+). A name like "Holzbohlenweg" is therefore
+// never fetched by this half of the query, only by the tag half.
+//
+// Keep in step with nameFragments below: a word needs to be in *both* lists to
+// have any effect through the name path. This list decides what gets downloaded;
+// that one decides what is kept.
 var boardwalkNames = []string{
 	"Bohlenweg", "Bohlensteg", "Bohlenpfad", "Holzsteg", "Moorsteg",
-	"Moorstege", "Bretterweg", "Knüppeldamm", "Boardwalk",
+	"Moorstege", "Bretterweg", "Knüppeldamm", "Knüppelweg", "Knüppelpfad",
+	"Plankenweg", "Boardwalk",
 }
 
 // Lower-case fragments that hint at a boardwalk, covering plurals and compounds
 // the exact names above miss. A way that only matches here gets the UI's lowest
 // confidence label.
+//
+// The rule for adding a word: it must name the **structure**, not the setting.
+// Bohle, Bretter, Planke, Knüppel and Steg all describe planks, logs or a raised
+// walkway. Words that only say where the path goes, or what was carried along it,
+// are not evidence and were measured to be mostly noise:
+//
+//	Holzweg   973 ways, 72 walkable and untagged — a timber haul road, and the
+//	          idiom for being on the wrong track. Almost none are planked.
+//	Moorweg   884 ways, 51 — a path through a moor need not be planked at all.
+//	Moorpfad    7 ways,  2 — same reasoning as Moorweg.
+//	Stegweg    19 ways,  4 — a way *to* a Steg is not itself one.
+//
+// Knüppelweg by contrast is a corduroy road by definition: 21 of the ways already
+// in the file are called that, and 8 more qualify on the name alone.
 var nameFragments = []string{
 	"bohlenweg", "bohlensteg", "bohlenpfad", "holzsteg", "moorsteg",
-	"bretterweg", "knüppeldamm", "boardwalk",
+	"bretterweg", "knüppeldamm", "knüppelweg", "knüppelpfad", "plankenweg",
+	"boardwalk",
 }
 
 // Surfaces that rule out wooden planks.

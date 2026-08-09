@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"slices"
+	"strings"
+	"testing"
+)
 
 // A name is weak evidence: "Bohlenweg" is an ordinary German street name, so a
 // stated surface that cannot be planks outweighs it. Ways with a real boardwalk
@@ -111,5 +115,88 @@ func TestHasNonWoodSurface(t *testing.T) {
 				t.Errorf("hasNonWoodSurface(%q) = %t, want %t", c.surface, got, c.want)
 			}
 		})
+	}
+}
+
+// The two lists have to stay in step: boardwalkNames decides what Overpass sends
+// us, nameFragments decides what we keep. A word in only one list is either never
+// fetched or fetched and thrown away.
+func TestNameListsAgree(t *testing.T) {
+	for _, exact := range boardwalkNames {
+		if !matchesName(exact) {
+			t.Errorf("boardwalkNames has %q but no fragment matches it, so every way "+
+				"fetched by that name is discarded", exact)
+		}
+	}
+
+	// The reverse direction is looser on purpose: "moorsteg" also covers the
+	// plural "Moorstege", and a fragment may be a substring of a longer exact
+	// name. Every fragment must still be reachable by *some* exact name.
+	for _, fragment := range nameFragments {
+		found := slices.ContainsFunc(boardwalkNames, func(exact string) bool {
+			return strings.Contains(strings.ToLower(exact), fragment)
+		})
+		if !found {
+			t.Errorf("nameFragments has %q but no exact name contains it, so the name "+
+				"half of the query never fetches one", fragment)
+		}
+	}
+}
+
+func TestMatchesName(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+		why  string
+	}{
+		{"Bohlenweg", true, "exact match on a listed name"},
+		{"Knüppelweg", true, "added because a corduroy road is planked by definition"},
+		{"Knüppelpfad", true, "same structure, different suffix"},
+		{"Plankenweg", true, "asked for; adds 3 walkable ways in Germany"},
+		{"Holzbohlenweg", true, "substring match, which the exact query cannot fetch"},
+		{"Bohlenweg ins Schwimmende Moor", true, "fragment found anywhere in the name"},
+		{"Moorstege", true, "the plural is covered by the singular fragment"},
+		{"bohlenweg", true, "matching is case-insensitive"},
+
+		// Deliberately not matched. Bohlenstraße is a street by its own name: the
+		// suffix says road, not path, and nothing about planks. Treating it as
+		// evidence would re-add exactly the addresses nonWoodSurfaces removes.
+		{"Bohlenstraße", false, "a Straße is a street, whatever it is called"},
+		{"Holzweg", false, "a timber haul road, and the idiom for the wrong track"},
+		{"Moorweg", false, "a path through a moor need not be planked"},
+		{"Stegweg", false, "a way to a Steg is not itself one"},
+		{"Hauptstraße", false, "no boardwalk word at all"},
+		{"", false, "an unnamed way has no name evidence"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := matchesName(c.name); got != c.want {
+				t.Errorf("matchesName(%q) = %t, want %t: %s", c.name, got, c.want, c.why)
+			}
+		})
+	}
+}
+
+// The query is built from the same lists, so a new word cannot be forgotten here.
+func TestBuildQueryIncludesEveryNameAndTag(t *testing.T) {
+	q := buildQuery()
+
+	for _, n := range boardwalkNames {
+		want := `way["name"="` + n + `"];`
+		if !strings.Contains(q, want) {
+			t.Errorf("query is missing %s", want)
+		}
+	}
+	for _, tag := range boardwalkTags {
+		want := `way["` + tag.Key + `"="` + tag.Value + `"];`
+		if !strings.Contains(q, want) {
+			t.Errorf("query is missing %s", want)
+		}
+	}
+
+	// Exact matches only: a regex over all of Germany measured 30 s+ against 1 s.
+	if strings.Contains(q, `name~`) {
+		t.Error("query uses a name regex; that measured ~30x slower on Overpass")
 	}
 }
