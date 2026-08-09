@@ -4,7 +4,7 @@
 // Each shipped way carries the id of its group (`c` in the JSON, the smallest OSM
 // way id in the group), so src/boardwalks.ts groups by that field instead of
 // re-running a union-find over 15,283 ways on every page load. That removes the
-// second copy of connectedComponents/samePath/touches that used to live in the
+// second copy of connectedComponents and samePath that used to live in the
 // browser and had to be kept in step by hand.
 //
 // The group id is derived from the data, never from iteration order: Go
@@ -23,7 +23,11 @@ import (
 	"strings"
 )
 
-// Way endpoints closer than this count as the same junction.
+// Vertices closer than this count as the same junction.
+//
+// `out tags geom` returns no node ids, so distance is all we have. 20 m already
+// accounts for 69% of all joins (median 5.41 m); widening it risks chaining
+// parallel boardwalks that merely run near each other.
 //
 // Only the builder joins ways now, so this number has no counterpart in the
 // browser any more.
@@ -76,8 +80,15 @@ func groupAndFilter(ways []outWay, minLengthM float64) ([]outWay, int) {
 // connectedComponents groups indices of ways that touch and look like the same
 // path.
 //
-// Only ways whose endpoints share a grid cell are compared, which keeps this
-// linear rather than quadratic in the 48,000 ways.
+// Every vertex counts as a possible junction, not just the two endpoints. OSM
+// frequently splits a way so that one *ends in the middle of another* — a side
+// branch off a boardwalk, a jetty off a walkway — and comparing endpoints alone
+// left those as separate networks. Direction is deliberately ignored: a branch
+// meeting a path at a right angle is still part of the same network.
+//
+// Vertices are indexed in a grid whose cells are two join distances wide, so two
+// vertices within joinDistanceM always land in the same or an adjacent cell. That
+// keeps this near-linear in the 48,000 ways instead of comparing all pairs.
 func connectedComponents(ways []outWay) [][]int {
 	const cellSize = (joinDistanceM * 2) / 111_320 // degrees
 
@@ -86,11 +97,24 @@ func connectedComponents(ways []outWay) [][]int {
 		return cell{int(math.Floor(p[0] / cellSize)), int(math.Floor(p[1] / cellSize))}
 	}
 
-	grid := make(map[cell][]int, len(ways)*2)
+	// Which way each indexed vertex belongs to, and where it is. Storing the point
+	// alongside the way index means the neighbour scan can compare the two
+	// vertices directly, rather than re-testing every vertex pair of both ways.
+	type vertex struct {
+		way   int
+		point [2]float64
+	}
+
+	total := 0
+	for _, w := range ways {
+		total += len(w.G)
+	}
+
+	grid := make(map[cell][]vertex, total)
 	for i, w := range ways {
-		for _, p := range wayEnds(w) {
+		for _, p := range w.G {
 			c := cellOf(p)
-			grid[c] = append(grid[c], i)
+			grid[c] = append(grid[c], vertex{way: i, point: p})
 		}
 	}
 
@@ -116,17 +140,21 @@ func connectedComponents(ways []outWay) [][]int {
 	}
 
 	for i, w := range ways {
-		for _, p := range wayEnds(w) {
+		for _, p := range w.G {
 			c := cellOf(p)
 			// The point's own cell and the eight around it.
 			for dLat := -1; dLat <= 1; dLat++ {
 				for dLon := -1; dLon <= 1; dLon++ {
-					for _, j := range grid[cell{c.lat + dLat, c.lon + dLon}] {
-						if j <= i {
+					for _, v := range grid[cell{c.lat + dLat, c.lon + dLon}] {
+						if v.way <= i {
 							continue
 						}
-						if samePath(w, ways[j]) && touches(w, ways[j]) {
-							union(i, j)
+						// Already joined, so the distance does not matter.
+						if find(v.way) == find(i) {
+							continue
+						}
+						if distance(p, v.point) <= joinDistanceM && samePath(w, ways[v.way]) {
+							union(i, v.way)
 						}
 					}
 				}
@@ -145,11 +173,6 @@ func connectedComponents(ways []outWay) [][]int {
 		out = append(out, members)
 	}
 	return out
-}
-
-// wayEnds returns the first and last point of a way.
-func wayEnds(w outWay) [2][2]float64 {
-	return [2][2]float64{w.G[0], w.G[len(w.G)-1]}
 }
 
 // samePath reports whether two ways plausibly belong to the same path.
@@ -171,19 +194,6 @@ func samePath(a, b outWay) bool {
 	}
 
 	return nameA == "" && nameB == ""
-}
-
-// touches reports whether two ways have endpoints close enough to be the same
-// junction. `out tags geom` returns no node ids, so distance is all we have.
-func touches(a, b outWay) bool {
-	for _, pa := range wayEnds(a) {
-		for _, pb := range wayEnds(b) {
-			if distance(pa, pb) <= joinDistanceM {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func lineLength(points [][2]float64) float64 {

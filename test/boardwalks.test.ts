@@ -189,9 +189,49 @@ describe("groupWays", () => {
     expect(groupWays(unnamed)[0]!.title).toBe("Bohlenweg (unbenannt)");
   });
 
+  it("assembles a branching network into one group", () => {
+    // The builder joins ways that meet at *any* vertex, not just at an endpoint,
+    // so a group can be a T rather than a chain. The browser must total every
+    // branch and cover them all in the bounds — it has no notion of a main line.
+    const ways = parseWays([
+      // 100 m through-way running east, with a vertex in the middle.
+      way(
+        1,
+        { highway: "footway", bridge: "boardwalk" },
+        [
+          [53, 8],
+          [53, 8 + 50 / 74_000],
+          [53, 8 + 100 / 74_000],
+        ],
+        1,
+      ),
+      // 40 m branch dropping south from that middle vertex, at a right angle.
+      way(
+        2,
+        { highway: "footway", bridge: "boardwalk" },
+        [
+          [53, 8 + 50 / 74_000],
+          [53 - 40 / 111_320, 8 + 50 / 74_000],
+        ],
+        1,
+      ),
+    ]);
+
+    const groups = groupWays(ways);
+    expect(groups).toHaveLength(1);
+
+    const group = groups[0]!;
+    expect(group.ways).toHaveLength(2);
+    // 100 m + 40 m, so the branch is counted rather than treated as a detour.
+    expect(group.lengthM).toBeGreaterThan(130);
+    expect(group.lengthM).toBeLessThan(150);
+    // The bounds have to reach south past the through-way to include the branch.
+    expect(group.bounds.minLat).toBeLessThan(53);
+  });
+
   it("stays fast with a lot of ways", () => {
     // Bucketing by group id is a single pass, where the union-find over endpoint
-    // distances this replaced cost 38 ms for the real 15,256 ways.
+    // distances this replaced cost 29 ms for the real 15,713 ways.
     const ways = Array.from({ length: 15_000 }, (_, i) =>
       way(
         i + 1,

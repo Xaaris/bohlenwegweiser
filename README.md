@@ -91,7 +91,7 @@ instances are shared and their load is unpredictable. Racing two mirrors helped
 but did not fix it.
 
 All boardwalk candidates in Germany come to 51,000 ways. After dropping paths
-under 25 m the file holds 15,283 ways at 0.56 MB gzipped — small enough to ship
+under 25 m the file holds 15,713 ways at 0.57 MB gzipped — small enough to ship
 as a static file.
 
 The dataset is as old as the last rebuild. For boardwalks that is fine.
@@ -120,12 +120,12 @@ hand. Shipping the id instead:
 
 - removes the duplication — `connectedComponents`, `samePath` and `touches` now
   exist only in Go;
-- cuts the browser's grouping from 29 ms to 12 ms on the real 15,283 ways;
+- cuts the browser's grouping from 29 ms to 10 ms on the real 15,713 ways;
 - costs 25 KB gzipped, 4.5% of the file, measured by stripping the field from the
   same data and re-compressing.
 
 The two were checked against each other before the browser copy was deleted: the
-shipped ids reproduce the union-find's 8357 groups **exactly**, with no group
+shipped ids reproduced the union-find's 8357 groups **exactly**, with no group
 appearing in one and not the other.
 
 The trade-off is that a change to the joining rules needs `npm run data` to take
@@ -144,8 +144,8 @@ length as the map moved and could split into two cards. Measured on
 reported 1590 m, and at one clipping it appeared as two entries. Since the length
 is the only sort key, the list order moved with the map too.
 
-The cost went the right way. Assembling all 15,283 ways into groups measures
-12 ms, once, inside the loading indicator; the per-pan work drops from re-grouping
+The cost went the right way. Assembling all 15,713 ways into groups measures
+10 ms, once, inside the loading indicator; the per-pan work drops from re-grouping
 (0.5 ms in a village, 1.4 ms over Hamburg) to a bounding-box test per group at
 0.1 ms. First load measured 95–119 ms before and about 167 ms after. The map draws
 the same number of lines either way — 1016 over Hamburg at zoom 9 — because a
@@ -192,12 +192,28 @@ that is 15,209 high, 4 medium and 43 low.
 ### Grouping
 
 OSM often splits one path into several ways — the median way in the dataset is
-just 10 m long. The builder merges ways that touch (endpoints within 20 m) and
+just 10 m long. The builder merges ways that come within 20 m of each other and
 look like the same path. Differently named ways are never merged, even where
 they meet.
 
-Only ways whose endpoints fall into the same grid cell are compared, so grouping
-all 51,000 candidates stays linear rather than quadratic. See
+Proximity is tested between **all vertices**, not just the two endpoints of each
+way. OSM routinely splits a way so that one *ends in the middle of another* — a
+side branch off a boardwalk, a jetty off a walkway — and neither endpoint of the
+through-way is anywhere near that junction. Comparing endpoints only left **303
+networks split** that are one thing on the ground.
+
+Wurzacher Ried is the clearest example: five side branches attach at shared nodes
+partway along one 15-vertex way, so its network went from 321 m in 7 sections to
+349 m in 12. The five branches were previously an orphan below the 25 m minimum
+and were dropped entirely.
+
+Direction is deliberately ignored — a branch meeting a path at a right angle is
+still part of the same network, so there is no angle test. Two ways that merely
+cross without sharing a vertex are not joined, because OSM models a real junction
+with a shared node.
+
+Only vertices in the same or an adjacent grid cell are compared, so grouping all
+51,000 candidates stays near-linear: the whole build takes 0.8 s. See
 [Who groups the ways](#who-groups-the-ways) for why the browser no longer repeats
 this.
 
@@ -215,8 +231,8 @@ Two things make this work without further configuration:
 - `base: "./"` in `vite.config.ts`, so assets resolve relative to the page. The
   usual failure mode for project pages is absolute `/assets/...` paths, which
   404 under a subpath.
-- GitHub Pages serves JSON gzipped, so the 2.6 MB dataset goes over the wire at
-  0.56 MB. Verified against a live Pages site: `content-encoding: gzip`.
+- GitHub Pages serves JSON gzipped, so the 2.7 MB dataset goes over the wire at
+  0.57 MB. Verified against a live Pages site: `content-encoding: gzip`.
 
 Pages limits are 1 GB per site and 100 GB of traffic per month, both far above
 what this needs. The deploy workflow runs `npm run check` first, so a failing

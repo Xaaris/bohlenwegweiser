@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"slices"
 	"testing"
 )
@@ -11,6 +12,22 @@ func testWay(id int64, lat, lon, meters float64, tags map[string]string) outWay 
 		I: id,
 		T: tags,
 		G: [][2]float64{{lat, lon}, {lat + meters/111_320, lon}},
+	}
+}
+
+// A way through explicit [lat, lon] vertices, for junctions that are not at an
+// endpoint. testWay only builds two-point lines, which cannot express "ends in
+// the middle of another way".
+func testWayAt(id int64, tags map[string]string, points ...[2]float64) outWay {
+	return outWay{I: id, T: tags, G: points}
+}
+
+// Metres north/east of a base point, as a degree offset. Longitude is scaled by
+// cos(lat) so "20 m east" really is 20 m.
+func offset(lat, lon, northM, eastM float64) [2]float64 {
+	return [2]float64{
+		lat + northM/111_320,
+		lon + eastM/(111_320*math.Cos(lat*math.Pi/180)),
 	}
 }
 
@@ -130,6 +147,105 @@ func TestGroupIDIsSmallestMemberAndOrderIndependent(t *testing.T) {
 				t.Errorf("way %d has group %d, want the smallest member id 100", w.I, got)
 			}
 		}
+	}
+}
+
+func TestGroupAndFilterJoinsAtInteriorVertices(t *testing.T) {
+	const lat, lon = 53.0, 8.0
+
+	// A 100 m through-way running east, with a vertex in the middle at 50 m.
+	through := testWayAt(1, boardwalk,
+		offset(lat, lon, 0, 0),
+		offset(lat, lon, 0, 50),
+		offset(lat, lon, 0, 100),
+	)
+
+	cases := []struct {
+		name   string
+		branch outWay
+		want   int // expected number of groups
+	}{
+		{
+			// Straight south off the middle vertex: a right angle. This must join;
+			// direction is irrelevant to whether it is the same network.
+			name: "right-angle T at the middle vertex",
+			branch: testWayAt(2, boardwalk,
+				offset(lat, lon, 0, 50),
+				offset(lat, lon, -40, 50),
+			),
+			want: 1,
+		},
+		{
+			// Not exactly on the vertex, but within the join distance of it.
+			name: "near the middle vertex, inside the join distance",
+			branch: testWayAt(3, boardwalk,
+				offset(lat, lon, -15, 50),
+				offset(lat, lon, -60, 50),
+			),
+			want: 1,
+		},
+		{
+			// Meets the shared endpoint instead: the case that already worked.
+			name: "at an endpoint",
+			branch: testWayAt(4, boardwalk,
+				offset(lat, lon, 0, 100),
+				offset(lat, lon, -40, 100),
+			),
+			want: 1,
+		},
+		{
+			// Off the end of the middle vertex by more than the join distance, and
+			// not near any other vertex either.
+			name: "too far from every vertex",
+			branch: testWayAt(5, boardwalk,
+				offset(lat, lon, -60, 50),
+				offset(lat, lon, -100, 50),
+			),
+			want: 2,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			kept, groups := groupAndFilter([]outWay{through, c.branch}, 25)
+
+			if groups != c.want {
+				t.Errorf("groups = %d, want %d (kept %v)", groups, c.want, ids(kept))
+			}
+			if c.want == 1 {
+				// One group means both ways report the same group id.
+				for _, w := range kept {
+					if got := groupIDOf(w); got != 1 {
+						t.Errorf("way %d has group %d, want 1", w.I, got)
+					}
+				}
+			}
+		})
+	}
+}
+
+// A vertex in the middle of a way does not join ways that merely cross without
+// sharing a vertex. OSM models a real crossing with a shared node, so two ways
+// passing over each other at different heights stay separate.
+func TestGroupAndFilterIgnoresCrossingsWithoutAVertex(t *testing.T) {
+	const lat, lon = 53.0, 8.0
+
+	// East-west, vertices only at its two ends, 200 m apart.
+	eastWest := testWayAt(1, boardwalk,
+		offset(lat, lon, 0, -100),
+		offset(lat, lon, 0, 100),
+	)
+	// North-south through the same middle point, again only end vertices. The
+	// lines cross geometrically but share no vertex within 20 m.
+	northSouth := testWayAt(2, boardwalk,
+		offset(lat, lon, -100, 0),
+		offset(lat, lon, 100, 0),
+	)
+
+	_, groups := groupAndFilter([]outWay{eastWest, northSouth}, 25)
+	if groups != 2 {
+		t.Errorf("groups = %d, want 2: a crossing without a shared vertex is not a junction",
+			groups)
 	}
 }
 
