@@ -13,14 +13,14 @@ dataset. Deployed to GitHub Pages at
 `src/types.ts` — read that file first.
 
 Key design decision: there is **no runtime Overpass query**. The whole German
-dataset (~0.57 MB gzipped, 15,713 ways) is fetched once and filtered in memory
+dataset (~0.57 MB gzipped, 15,677 ways) is fetched once and filtered in memory
 on every pan/zoom. Do not reintroduce per-search network calls.
 
 Second decision, easy to undo by accident: **grouping happens once, over the
 whole dataset**, and the viewport filter (`groupsInBounds`) runs on finished
 groups. Filtering ways first and then grouping rebuilt each group from whatever
 was on screen, so `way/18963200` reported 3219 m at full extent and 1590 m with
-half of it off screen, and sometimes appeared as two cards. Bucketing all 15,713
+half of it off screen, and sometimes appeared as two cards. Bucketing all 15,677
 ways by their group id costs 10 ms once; the box test per pan is 0.1 ms.
 
 ## Duplicated logic that must stay in sync
@@ -40,7 +40,11 @@ What is left to keep in step:
 | `confidenceOf` (`src/boardwalks.ts`) | `boardwalkTags` (`main.go`) |
 
 **Deciding what counts as a boardwalk lives only in the builder** (`isRelevant`,
-`looksLikeBoardwalk`, `boardwalkTags`, `nameFragments`, `relevantHighways`). The
+`looksLikeBoardwalk`, `boardwalkTags`, `nameFragments`, `relevantHighways`,
+`nonWoodSurfaces`). `nonWoodSurfaces` applies **only** to ways that qualify on
+their name alone — "Bohlenweg" is a common street name, and 37 asphalt or
+compacted tracks were being shipped as boardwalks. Never let it override an
+explicit `bridge=boardwalk`, and note that any value mentioning wood is kept. The
 browser used to repeat those checks defensively; measured against the real file
 the copy dropped 0 of 15,256 ways, so it was removed. `confidenceOf`
 (`src/boardwalks.ts`) only *grades* the tags into the labels the UI shows — add a

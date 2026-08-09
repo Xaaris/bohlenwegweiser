@@ -70,6 +70,23 @@ var nameFragments = []string{
 	"bretterweg", "knüppeldamm", "boardwalk",
 }
 
+// Surfaces that rule out wooden planks.
+//
+// Only consulted for ways that qualify on their *name* alone. "Bohlenweg" is an
+// ordinary German street name, so an asphalt track called Bohlenweg is an address,
+// not a boardwalk: 39 of the 50 name-only ways in Germany are this case.
+//
+// A way with real evidence (bridge=boardwalk, surface=wood, ...) is never judged
+// by this list. `surface=compacted` next to `bridge=boardwalk` is odd tagging, but
+// the explicit tag is the stronger signal.
+var nonWoodSurfaces = []string{
+	"asphalt", "concrete", "concrete:lanes", "concrete:plates",
+	"paving_stones", "sett", "cobblestone", "unhewn_cobblestone",
+	"compacted", "gravel", "fine_gravel", "pebblestone",
+	"dirt", "ground", "earth", "mud", "sand", "grass", "grass_paver",
+	"metal", "clay", "rock", "stone", "unpaved", "paved",
+}
+
 // highway values that can plausibly be walked on.
 var relevantHighways = []string{
 	"footway", "path", "cycleway", "bridleway", "pedestrian", "steps", "track",
@@ -396,10 +413,33 @@ func looksLikeBoardwalk(tags map[string]string) bool {
 		}
 	}
 
-	name := strings.ToLower(tags["name"])
-	return name != "" && slices.ContainsFunc(nameFragments, func(f string) bool {
-		return strings.Contains(name, f)
+	// No telling tag, so the name is the only evidence — and a name is weak
+	// evidence, because "Bohlenweg" is an ordinary German street name. A stated
+	// surface that cannot be planks outweighs it.
+	return matchesName(tags["name"]) && !hasNonWoodSurface(tags["surface"])
+}
+
+func matchesName(name string) bool {
+	lower := strings.ToLower(name)
+	return lower != "" && slices.ContainsFunc(nameFragments, func(f string) bool {
+		return strings.Contains(lower, f)
 	})
+}
+
+// hasNonWoodSurface reports whether the surface value rules out wooden planks.
+//
+// Any mention of wood wins, so `wood;gravel` and `woodchips` are not rejected.
+// That is deliberately generous: woodchips are not planks, but a path named
+// Knüppeldamm laid with woodchips is a genuine soft-ground path rather than a
+// street address, which is what this check is for. Two such ways exist.
+//
+// An absent surface tag is not contrary evidence, so those 11 ways stay.
+func hasNonWoodSurface(surface string) bool {
+	lower := strings.ToLower(strings.TrimSpace(surface))
+	if lower == "" || strings.Contains(lower, "wood") {
+		return false
+	}
+	return slices.Contains(nonWoodSurfaces, lower)
 }
 
 // pickTags keeps only the tags the UI reads. Returns nil rather than an empty

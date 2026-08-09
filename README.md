@@ -91,7 +91,7 @@ instances are shared and their load is unpredictable. Racing two mirrors helped
 but did not fix it.
 
 All boardwalk candidates in Germany come to 51,000 ways. After dropping paths
-under 25 m the file holds 15,713 ways at 0.57 MB gzipped — small enough to ship
+under 25 m the file holds 15,677 ways at 0.57 MB gzipped — small enough to ship
 as a static file.
 
 The dataset is as old as the last rebuild. For boardwalks that is fine.
@@ -120,7 +120,7 @@ hand. Shipping the id instead:
 
 - removes the duplication — `connectedComponents`, `samePath` and `touches` now
   exist only in Go;
-- cuts the browser's grouping from 29 ms to 10 ms on the real 15,713 ways;
+- cuts the browser's grouping from 29 ms to 10 ms on the real 15,677 ways;
 - costs 25 KB gzipped, 4.5% of the file, measured by stripping the field from the
   same data and re-compressing.
 
@@ -144,7 +144,7 @@ length as the map moved and could split into two cards. Measured on
 reported 1590 m, and at one clipping it appeared as two entries. Since the length
 is the only sort key, the list order moved with the map too.
 
-The cost went the right way. Assembling all 15,713 ways into groups measures
+The cost went the right way. Assembling all 15,677 ways into groups measures
 10 ms, once, inside the loading indicator; the per-pan work drops from re-grouping
 (0.5 ms in a village, 1.4 ms over Hamburg) to a bounding-box test per group at
 0.1 ms. First load measured 95–119 ms before and about 167 ms after. The map draws
@@ -183,11 +183,31 @@ _Sicher_, _Wahrscheinlich_ or _Unsicher_:
 Ways must also be a footpath (`highway=footway`, `path`, ...) or a
 `man_made=pier`, which filters out wooden driveways and terraces.
 
+A **name on its own is weak evidence**, because "Bohlenweg" is an ordinary German
+street name. So a way that qualifies only through its name is rejected when its
+`surface` rules out planks: an asphalt track called Bohlenweg is an address, not a
+boardwalk. That dropped 37 ways, all of them streets — 13 `compacted`, 4 each of
+`dirt`, `gravel` and `fine_gravel`, 3 `sand`, 3 `concrete`, 2 `asphalt` and so on.
+
+Two deliberate exceptions:
+
+- An **absent** `surface` tag is not contrary evidence, so those ways stay. There
+  are 11, such as `way/47591162` (`Bohlenweg`, `highway=track`, no surface).
+- Any surface value **mentioning wood** stays, including `woodchips` and compound
+  values like `wood;gravel`. Woodchips are not planks, but a `Knüppeldamm` laid
+  with woodchips is a real soft-ground path rather than a street address, which is
+  what this check is for.
+
+The surface test applies **only** to the name-only path. A way tagged
+`bridge=boardwalk` with `surface=compacted` is odd tagging, but the explicit tag
+is the stronger signal and it is kept.
+
 Deciding *whether* a way qualifies happens only in `tools/build-dataset`. The
 browser used to repeat those checks as a safety net, but measured against the
 real file they dropped 0 of 15,256 ways — a second copy to keep in sync for no
 effect. It now only labels what the builder shipped. Across the whole dataset
-that is 15,209 high, 4 medium and 43 low.
+that is 15,665 high, 4 medium and 8 low — the 8 being the name-only ways with no
+surface tag.
 
 ### Grouping
 
