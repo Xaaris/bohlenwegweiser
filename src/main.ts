@@ -1,8 +1,8 @@
 /**
  * App wiring: draws whatever boardwalks are in view, renders the list.
  *
- * The interesting logic lives in boardwalks.ts (grouping) and dataset.ts
- * (loading and viewport filtering). This file is mostly DOM plumbing.
+ * The interesting logic lives in boardwalks.ts (labelling and grouping) and
+ * dataset.ts (loading and viewport filtering). This file is mostly DOM plumbing.
  */
 
 import "./styles.css";

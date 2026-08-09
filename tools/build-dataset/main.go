@@ -44,7 +44,9 @@ var bbox = [4]float64{47.2, 5.8, 55.1, 15.1} // minLat, minLon, maxLat, maxLon
 //
 // Used for both halves of the job: building the Overpass query and deciding
 // which returned ways to keep. One list, so the two cannot drift apart.
-// Mirrors confidenceOf() in src/boardwalks.ts.
+//
+// confidenceOf() in src/boardwalks.ts grades the same tags into the labels the
+// UI shows, so a new pair usually wants a case there too.
 var boardwalkTags = []struct{ Key, Value string }{
 	{"surface", "wood"},
 	{"bridge", "boardwalk"},
@@ -61,14 +63,14 @@ var boardwalkNames = []string{
 }
 
 // Lower-case fragments that hint at a boardwalk, covering plurals and compounds
-// the exact names above miss. Mirrors NAME_PATTERN in src/config.ts.
+// the exact names above miss. A way that only matches here gets the UI's lowest
+// confidence label.
 var nameFragments = []string{
 	"bohlenweg", "bohlensteg", "bohlenpfad", "holzsteg", "moorsteg",
 	"bretterweg", "knüppeldamm", "boardwalk",
 }
 
-// highway values that can plausibly be walked on. Mirrors RELEVANT_HIGHWAYS in
-// src/config.ts.
+// highway values that can plausibly be walked on.
 var relevantHighways = []string{
 	"footway", "path", "cycleway", "bridleway", "pedestrian", "steps", "track",
 }
@@ -319,9 +321,9 @@ type stats struct {
 // convert filters the Overpass elements down to plausible boardwalks and trims
 // each one to what the UI needs.
 //
-// This repeats the checks in src/boardwalks.ts. Keeping them here as well is
-// what makes the payload small; the browser re-applies them anyway, so a
-// mismatch shows up as extra data rather than wrong results.
+// This is the only place that decides whether a way counts as a boardwalk. The
+// browser used to repeat these checks, but the copy dropped 0 of 15,256 ways
+// while being a second thing to keep in sync, so it was removed.
 func convert(elements []overpassWay) ([]outWay, stats) {
 	var st stats
 	seen := make(map[int64]bool, len(elements))
@@ -380,8 +382,8 @@ func isRelevant(tags map[string]string) bool {
 }
 
 // looksLikeBoardwalk reports whether the tags say anything about a boardwalk at
-// all. The browser decides how strong that evidence is; here we only need to
-// know whether the way is worth shipping.
+// all. That is the whole test for shipping a way; the browser only grades the
+// evidence into a label afterwards.
 func looksLikeBoardwalk(tags map[string]string) bool {
 	for _, t := range boardwalkTags {
 		if tags[t.Key] == t.Value {

@@ -39,25 +39,6 @@ export const MIN_LENGTH_M = 25;
  */
 export const MIN_ZOOM_FOR_RESULTS = 9;
 
-/** OSM highway values that can plausibly be a boardwalk. */
-export const RELEVANT_HIGHWAYS = [
-  "footway",
-  "path",
-  "cycleway",
-  "bridleway",
-  "pedestrian",
-  "steps",
-  "track",
-];
-
-/**
- * Name fragments that hint at a boardwalk.
- *
- * The dataset builder has its own copy of this list; keep them in step.
- */
-export const NAME_PATTERN =
-  /(bohlenweg|bohlensteg|bohlenpfad|holzsteg|moorsteg|bretterweg|knüppeldamm|boardwalk)/i;
-
 /** Way endpoints closer than this count as the same junction. */
 export const JOIN_DISTANCE_M = 20;
 

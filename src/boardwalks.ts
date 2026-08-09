@@ -1,31 +1,33 @@
 /**
- * Turns dataset ways into ranked boardwalk groups.
+ * Turns dataset ways into boardwalk groups.
  *
  * Steps:
- *   1. parseWays   - filter to plausible boardwalks, measure each one
+ *   1. parseWays   - measure each way and label how sure we are
  *   2. groupWays   - merge ways that touch and look like the same path
  *   3. sort        - longest first
+ *
+ * Deciding *whether* a way is a boardwalk happens in tools/build-dataset: the
+ * dataset only contains ways that passed those filters. Repeating them here
+ * dropped 0 of 15,256 ways, so the check was dead weight. What stays is the
+ * labelling, because the UI shows it.
  */
 
-import { JOIN_DISTANCE_M, NAME_PATTERN, RELEVANT_HIGHWAYS } from "./config.js";
+import { JOIN_DISTANCE_M } from "./config.js";
 import { boundsOf, distance, lineLength } from "./geo.js";
 import type { Confidence, Group, Point, RawWay, Tags, Way } from "./types.js";
-
-const HIGHWAYS = new Set(RELEVANT_HIGHWAYS);
 
 /**
  * How strongly the tags suggest a boardwalk.
  *
  * OSM has no single canonical tag for a Bohlenweg, so this is a judgement call
- * shown to the user as "Sicher" / "Wahrscheinlich" / "Unsicher".
+ * shown to the user as "Sicher" / "Wahrscheinlich" / "Unsicher". Everything in
+ * the dataset qualifies as at least "low", which is the name-only case.
  */
-export function confidenceOf(tags: Tags): Confidence | null {
-  if (tags.bridge === "boardwalk") return "high";
-  if (tags.surface === "wood") return "high";
+export function confidenceOf(tags: Tags): Confidence {
+  if (tags.bridge === "boardwalk" || tags.surface === "wood") return "high";
   if (tags.boardwalk === "yes" || tags.footway === "boardwalk") return "medium";
   if (tags.surface === "boardwalk") return "medium";
-  if (tags.name && NAME_PATTERN.test(tags.name)) return "low";
-  return null;
+  return "low";
 }
 
 export const CONFIDENCE_LABELS: Record<Confidence, string> = {
@@ -36,36 +38,21 @@ export const CONFIDENCE_LABELS: Record<Confidence, string> = {
 
 const CONFIDENCE_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 };
 
-/** Whether the way is a footpath or a boardwalk-like structure. */
-function isRelevant(tags: Tags): boolean {
-  return (
-    (tags.highway !== undefined && HIGHWAYS.has(tags.highway)) || tags.man_made === "pier"
-  );
-}
-
-/**
- * Measures the given ways and keeps the plausible ones.
- *
- * The dataset builder already applies these checks, so normally nothing is
- * dropped here. Repeating them keeps the browser authoritative about what counts
- * as a boardwalk, so an out-of-date dataset shows up as extra candidates rather
- * than wrong labels.
- */
+/** Measures the given ways and labels each one. */
 export function parseWays(ways: RawWay[]): Way[] {
   const result: Way[] = [];
 
   for (const way of ways) {
+    // A single point cannot be drawn or measured. The builder drops these too;
+    // this guards the rest of the file against a malformed dataset.
     if (way.points.length < 2) continue;
-
-    const confidence = confidenceOf(way.tags);
-    if (confidence === null || !isRelevant(way.tags)) continue;
 
     result.push({
       id: way.id,
       tags: way.tags,
       points: way.points,
       lengthM: lineLength(way.points),
-      confidence,
+      confidence: confidenceOf(way.tags),
     });
   }
 

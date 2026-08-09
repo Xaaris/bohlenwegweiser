@@ -68,13 +68,13 @@ The code is deliberately small. In rough order of interest:
 
 | File                | Contains                                                |
 | ------------------- | ------------------------------------------------------- |
-| `src/types.ts`      | The data types. Start here.                             |
-| `src/config.ts`     | Tunable values: dataset URL, zoom threshold, tags.      |
-| `src/dataset.ts`    | Loads the dataset and filters it to the viewport.       |
-| `src/boardwalks.ts` | The interesting part: filter, score and group the ways. |
-| `src/geo.ts`        | Distance maths and number formatting.                   |
-| `src/map.ts`        | All Leaflet-specific code.                              |
-| `src/main.ts`       | Wires the DOM to the above.                             |
+| `src/types.ts`      | The data types. Start here.                              |
+| `src/config.ts`     | Tunable values: dataset URL, zoom threshold, list cap.   |
+| `src/dataset.ts`    | Loads the dataset and filters it to the viewport.        |
+| `src/boardwalks.ts` | The interesting part: label, group and sort the ways.    |
+| `src/geo.ts`        | Distance maths and number formatting.                    |
+| `src/map.ts`        | All Leaflet-specific code.                               |
+| `src/main.ts`       | Wires the DOM to the above.                              |
 
 Plus `tools/build-dataset/main.go`, which produces the dataset.
 
@@ -137,8 +137,9 @@ rendering 837 cards measured 79 ms of layout for a list nobody scrolls through.
 
 ### Finding boardwalks
 
-OSM has no single tag for a Bohlenweg, so `confidenceOf` scores the tags and the
-UI shows the result as _Sicher_, _Wahrscheinlich_ or _Unsicher_:
+OSM has no single tag for a Bohlenweg, so the dataset builder keeps a way if any
+of these apply, and `confidenceOf` in the browser grades the evidence into
+_Sicher_, _Wahrscheinlich_ or _Unsicher_:
 
 - `bridge=boardwalk` or `surface=wood` → high
 - `boardwalk=yes`, `footway=boardwalk`, `surface=boardwalk` → medium
@@ -147,9 +148,11 @@ UI shows the result as _Sicher_, _Wahrscheinlich_ or _Unsicher_:
 Ways must also be a footpath (`highway=footway`, `path`, ...) or a
 `man_made=pier`, which filters out wooden driveways and terraces.
 
-The dataset builder applies the same filters so the file stays small. The
-browser then re-applies them, which keeps it authoritative about what counts as
-a boardwalk: a stale dataset shows up as extra candidates, not wrong labels.
+Deciding *whether* a way qualifies happens only in `tools/build-dataset`. The
+browser used to repeat those checks as a safety net, but measured against the
+real file they dropped 0 of 15,256 ways — a second copy to keep in sync for no
+effect. It now only labels what the builder shipped. Across the whole dataset
+that is 15,209 high, 4 medium and 43 low.
 
 ### Grouping
 
