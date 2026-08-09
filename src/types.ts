@@ -25,6 +25,13 @@ export type Tags = Record<string, string | undefined>;
 /** A way as it comes out of the dataset, before we measure it. */
 export type RawWay = {
   id: number;
+  /**
+   * Id of the group this way belongs to, assigned by tools/build-dataset.
+   *
+   * Equal to `id` for a way that starts its own group. The browser trusts this
+   * instead of recomputing which ways touch; see groupWays in boardwalks.ts.
+   */
+  groupId: number;
   tags: Tags;
   points: Point[];
 };
@@ -35,6 +42,7 @@ export type Confidence = "high" | "medium" | "low";
 /** A single OSM way that looks like a boardwalk. */
 export type Way = {
   id: number;
+  groupId: number;
   tags: Tags;
   points: Point[];
   /** Length of the way in metres. */

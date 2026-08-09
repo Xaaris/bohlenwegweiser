@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { boundsOf, distance, formatDistance, lineLength } from "../src/geo.js";
+import {
+  boundsOf,
+  boundsOverlap,
+  distance,
+  formatDistance,
+  lineLength,
+} from "../src/geo.js";
 
 describe("distance", () => {
   it("is zero for the same point", () => {
@@ -45,6 +51,34 @@ describe("boundsOf", () => {
         { lat: 52.5, lon: 8.5 },
       ]),
     ).toEqual({ minLat: 52.5, minLon: 7.5, maxLat: 53.5, maxLon: 8.5 });
+  });
+});
+
+describe("boundsOverlap", () => {
+  const view = { minLat: 52.9, minLon: 7.9, maxLat: 53.1, maxLon: 8.1 };
+
+  it("accepts a box inside the view", () => {
+    expect(
+      boundsOverlap({ minLat: 53, minLon: 8, maxLat: 53.01, maxLon: 8.01 }, view),
+    ).toBe(true);
+  });
+
+  it("accepts a box that spans the view with all corners outside", () => {
+    expect(boundsOverlap({ minLat: 53, minLon: 7, maxLat: 53, maxLon: 9 }, view)).toBe(
+      true,
+    );
+  });
+
+  it("accepts a box that only touches a corner", () => {
+    expect(
+      boundsOverlap({ minLat: 53.1, minLon: 8.1, maxLat: 53.5, maxLon: 8.5 }, view),
+    ).toBe(true);
+  });
+
+  it("rejects a box beside the view", () => {
+    expect(
+      boundsOverlap({ minLat: 50, minLon: 8, maxLat: 50.1, maxLon: 8.1 }, view),
+    ).toBe(false);
   });
 });
 

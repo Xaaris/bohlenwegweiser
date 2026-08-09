@@ -48,6 +48,21 @@ export function boundsOf(points: Point[]): Bounds {
   return { minLat, minLon, maxLat, maxLon };
 }
 
+/**
+ * Whether two boxes overlap, touching edges included.
+ *
+ * Compares extents rather than points: a long way can cross the viewport with
+ * every one of its points outside it.
+ */
+export function boundsOverlap(a: Bounds, b: Bounds): boolean {
+  return (
+    a.minLat <= b.maxLat &&
+    a.maxLat >= b.minLat &&
+    a.minLon <= b.maxLon &&
+    a.maxLon >= b.minLon
+  );
+}
+
 const nf = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
 const nf1 = new Intl.NumberFormat("de-DE", {
   minimumFractionDigits: 1,

@@ -9,7 +9,7 @@
  */
 
 import { DATASET_URL } from "./config.js";
-import type { Bounds, Point, RawWay } from "./types.js";
+import type { Point, RawWay } from "./types.js";
 
 /** An error with a message that is safe and useful to show the user. */
 export class SearchError extends Error {
@@ -35,6 +35,8 @@ type DatasetFile = {
     t?: Record<string, string>;
     /** Geometry as [lat, lon] pairs. */
     g: [number, number][];
+    /** Group id; omitted when the way starts its own group. */
+    c?: number;
   }[];
 };
 
@@ -98,6 +100,9 @@ async function fetchDataset(signal?: AbortSignal): Promise<Dataset> {
     ways: file.ways.map(
       (w): RawWay => ({
         id: w.i,
+        // The builder omits `c` when it equals the way's own id, which is the
+        // common case: 8357 of 15,283 ways start their own group.
+        groupId: w.c ?? w.i,
         tags: { ...w.t, ...(w.n ? { name: w.n } : {}) },
         points: w.g.map(([lat, lon]) => ({ lat, lon })),
       }),
@@ -109,43 +114,6 @@ function parseDate(value: string | undefined): Date | null {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-/**
- * Ways whose extent overlaps the given box.
- *
- * Compares extents rather than testing individual points: a long way can cross
- * the viewport while all of its points lie outside.
- */
-export function waysInBounds(dataset: Dataset, bounds: Bounds): RawWay[] {
-  const found: RawWay[] = [];
-
-  for (const way of dataset.ways) {
-    if (overlaps(way.points, bounds)) found.push(way);
-  }
-
-  return found;
-}
-
-function overlaps(points: Point[], bounds: Bounds): boolean {
-  let minLat = Number.POSITIVE_INFINITY;
-  let maxLat = Number.NEGATIVE_INFINITY;
-  let minLon = Number.POSITIVE_INFINITY;
-  let maxLon = Number.NEGATIVE_INFINITY;
-
-  for (const p of points) {
-    if (p.lat < minLat) minLat = p.lat;
-    if (p.lat > maxLat) maxLat = p.lat;
-    if (p.lon < minLon) minLon = p.lon;
-    if (p.lon > maxLon) maxLon = p.lon;
-  }
-
-  return (
-    minLat <= bounds.maxLat &&
-    maxLat >= bounds.minLat &&
-    minLon <= bounds.maxLon &&
-    maxLon >= bounds.minLon
-  );
 }
 
 /** Whether the point lies inside the region the dataset covers. */

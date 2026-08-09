@@ -39,9 +39,6 @@ export const MIN_LENGTH_M = 25;
  */
 export const MIN_ZOOM_FOR_RESULTS = 9;
 
-/** Way endpoints closer than this count as the same junction. */
-export const JOIN_DISTANCE_M = 20;
-
 /**
  * Most result cards to put in the sidebar. The map draws everything in view;
  * this only caps the list.

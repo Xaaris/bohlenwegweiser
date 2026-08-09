@@ -1,8 +1,15 @@
-// Grouping, so the builder can drop paths that are too short to be interesting.
+// Grouping: the builder needs it to drop paths that are too short to be
+// interesting, and it emits the result so the browser does not have to repeat it.
 //
-// This mirrors connectedComponents() in src/boardwalks.ts. The duplication is
-// deliberate: the browser needs it to display groups, and the builder needs it
-// to decide what to ship.
+// Each shipped way carries the id of its group (`c` in the JSON, the smallest OSM
+// way id in the group), so src/boardwalks.ts groups by that field instead of
+// re-running a union-find over 15,283 ways on every page load. That removes the
+// second copy of connectedComponents/samePath/touches that used to live in the
+// browser and had to be kept in step by hand.
+//
+// The group id is derived from the data, never from iteration order: Go
+// randomises map iteration, and a sequential index would rewrite the whole file
+// on every rebuild even when nothing changed.
 //
 // Filtering individual ways does not work: the median way is 10 m long and 81%
 // are under 25 m, because OSM splits paths into many short segments. Dropping
@@ -16,17 +23,22 @@ import (
 	"strings"
 )
 
-// Way endpoints closer than this count as the same junction. Matches
-// JOIN_DISTANCE_M in src/config.ts.
+// Way endpoints closer than this count as the same junction.
+//
+// Only the builder joins ways now, so this number has no counterpart in the
+// browser any more.
 const joinDistanceM = 20.0
 
 const earthRadiusM = 6371008.8
 
-// keepLongEnough returns the ways whose group reaches minLengthM in total.
-func keepLongEnough(ways []outWay, minLengthM float64) []outWay {
+// groupAndFilter assigns each way its group id and returns the ways whose group
+// reaches minLengthM in total. It also reports how many groups survived.
+func groupAndFilter(ways []outWay, minLengthM float64) ([]outWay, int) {
 	groups := connectedComponents(ways)
 
 	kept := make([]outWay, 0, len(ways))
+	groupCount := 0
+
 	for _, members := range groups {
 		var total float64
 		for _, i := range members {
@@ -35,11 +47,30 @@ func keepLongEnough(ways []outWay, minLengthM float64) []outWay {
 		if total < minLengthM {
 			continue
 		}
+
+		// The smallest member id names the group: stable across rebuilds and
+		// independent of the order the components came out in.
+		groupID := ways[members[0]].I
 		for _, i := range members {
-			kept = append(kept, ways[i])
+			if ways[i].I < groupID {
+				groupID = ways[i].I
+			}
+		}
+
+		groupCount++
+		for _, i := range members {
+			w := ways[i]
+			// Left unset when it equals the way's own id, which covers every
+			// single-way group and the first member of every larger one. The
+			// reader falls back to `i`, so this costs nothing to interpret.
+			if groupID != w.I {
+				w.C = groupID
+			}
+			kept = append(kept, w)
 		}
 	}
-	return kept
+
+	return kept, groupCount
 }
 
 // connectedComponents groups indices of ways that touch and look like the same
@@ -116,12 +147,12 @@ func connectedComponents(ways []outWay) [][]int {
 	return out
 }
 
+// wayEnds returns the first and last point of a way.
 func wayEnds(w outWay) [2][2]float64 {
 	return [2][2]float64{w.G[0], w.G[len(w.G)-1]}
 }
 
-// samePath reports whether two ways plausibly belong to the same path. Mirrors
-// samePath() in src/boardwalks.ts.
+// samePath reports whether two ways plausibly belong to the same path.
 func samePath(a, b outWay) bool {
 	nameA := strings.ToLower(strings.TrimSpace(a.N))
 	nameB := strings.ToLower(strings.TrimSpace(b.N))

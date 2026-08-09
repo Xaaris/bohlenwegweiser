@@ -2,19 +2,30 @@
  * Turns dataset ways into boardwalk groups.
  *
  * Steps:
- *   1. parseWays   - measure each way and label how sure we are
- *   2. groupWays   - merge ways that touch and look like the same path
- *   3. sort        - longest first
+ *   1. parseWays       - measure each way and label how sure we are
+ *   2. groupWays       - collect ways by the group id the builder assigned
+ *   3. sort            - longest first
+ *   4. groupsInBounds  - pick the ones the viewport shows
  *
- * Deciding *whether* a way is a boardwalk happens in tools/build-dataset: the
+ * Grouping happens over the whole dataset, once, not per viewport: a group
+ * assembled from only the ways on screen reported a different length after every
+ * pan (way/18963200 measured 3219 m at full extent but 1590 m with half of it off
+ * screen) and could split into two cards. Filtering runs on finished groups.
+ *
+ * *Which* ways belong together is decided in tools/build-dataset and shipped as
+ * a field per way, so this file no longer repeats the union-find over endpoint
+ * distances. That copy had to be kept in step with group.go by hand, and cost
+ * 29 ms on every page load; bucketing by the shipped id costs 12 ms, and both
+ * were checked to produce the same 8357 groups.
+ *
+ * Deciding *whether* a way is a boardwalk also happens in the builder: the
  * dataset only contains ways that passed those filters. Repeating them here
  * dropped 0 of 15,256 ways, so the check was dead weight. What stays is the
  * labelling, because the UI shows it.
  */
 
-import { JOIN_DISTANCE_M } from "./config.js";
-import { boundsOf, distance, lineLength } from "./geo.js";
-import type { Confidence, Group, Point, RawWay, Tags, Way } from "./types.js";
+import { boundsOf, boundsOverlap, lineLength } from "./geo.js";
+import type { Bounds, Confidence, Group, RawWay, Tags, Way } from "./types.js";
 
 /**
  * How strongly the tags suggest a boardwalk.
@@ -49,6 +60,7 @@ export function parseWays(ways: RawWay[]): Way[] {
 
     result.push({
       id: way.id,
+      groupId: way.groupId,
       tags: way.tags,
       points: way.points,
       lengthM: lineLength(way.points),
@@ -60,117 +72,32 @@ export function parseWays(ways: RawWay[]): Way[] {
 }
 
 /**
- * Merges connected ways into groups, longest first.
+ * Collects ways into groups by the builder's group id, longest first.
  *
  * Sorted by length alone, because that is what the cards show. Confidence is a
  * label of its own, and mixing it into the order only makes the list look wrong.
  */
 export function groupWays(ways: Way[]): Group[] {
-  return connectedComponents(ways)
-    .map(toGroup)
-    .sort((a, b) => b.lengthM - a.lengthM);
+  const byGroup = new Map<number, Way[]>();
+
+  for (const way of ways) {
+    const members = byGroup.get(way.groupId);
+    if (members) members.push(way);
+    else byGroup.set(way.groupId, [way]);
+  }
+
+  return [...byGroup.values()].map(toGroup).sort((a, b) => b.lengthM - a.lengthM);
 }
 
 /**
- * Groups ways that are both adjacent and plausibly the same path.
+ * Groups whose extent overlaps the given box.
  *
- * Only ways whose endpoints share a grid cell are compared, so this stays fast
- * even when a wide viewport contains thousands of ways.
+ * A box test on the finished group, so panning cannot change a group's length or
+ * break it in two. Measured at 0.1 ms per pan, against 0.5 ms (a village) to
+ * 1.4 ms (Hamburg) for the re-grouping this replaced.
  */
-function connectedComponents(ways: Way[]): Way[][] {
-  const cellSize = (JOIN_DISTANCE_M * 2) / 111_320; // degrees
-  const grid = new Map<string, number[]>();
-
-  const cellKey = (p: Point) =>
-    `${Math.floor(p.lat / cellSize)}:${Math.floor(p.lon / cellSize)}`;
-
-  const endpointsOf = (way: Way): Point[] => [
-    way.points[0] as Point,
-    way.points[way.points.length - 1] as Point,
-  ];
-
-  ways.forEach((way, index) => {
-    for (const point of endpointsOf(way)) {
-      const key = cellKey(point);
-      const bucket = grid.get(key);
-      if (bucket) bucket.push(index);
-      else grid.set(key, [index]);
-    }
-  });
-
-  const parent = ways.map((_, index) => index);
-
-  const find = (i: number): number => {
-    let root = i;
-    while (parent[root] !== root) root = parent[root] as number;
-    // Flatten the path so later lookups are cheap.
-    let node = i;
-    while (parent[node] !== root) {
-      const next = parent[node] as number;
-      parent[node] = root;
-      node = next;
-    }
-    return root;
-  };
-
-  const union = (a: number, b: number) => {
-    const rootA = find(a);
-    const rootB = find(b);
-    if (rootA !== rootB) parent[rootB] = rootA;
-  };
-
-  ways.forEach((way, index) => {
-    for (const point of endpointsOf(way)) {
-      // Check the point's own cell and the eight around it.
-      const lat = Math.floor(point.lat / cellSize);
-      const lon = Math.floor(point.lon / cellSize);
-
-      for (let dLat = -1; dLat <= 1; dLat++) {
-        for (let dLon = -1; dLon <= 1; dLon++) {
-          for (const other of grid.get(`${lat + dLat}:${lon + dLon}`) ?? []) {
-            if (other <= index) continue;
-            const otherWay = ways[other] as Way;
-            if (samePath(way, otherWay) && touches(way, otherWay)) {
-              union(index, other);
-            }
-          }
-        }
-      }
-    }
-  });
-
-  const components = new Map<number, Way[]>();
-  ways.forEach((way, index) => {
-    const root = find(index);
-    const existing = components.get(root);
-    if (existing) existing.push(way);
-    else components.set(root, [way]);
-  });
-
-  return [...components.values()];
-}
-
-/** Whether two ways plausibly belong to the same path. */
-function samePath(a: Way, b: Way): boolean {
-  const nameA = a.tags.name?.trim().toLowerCase();
-  const nameB = b.tags.name?.trim().toLowerCase();
-
-  // Different names are a strong hint that these are different paths, even
-  // where they meet.
-  if (nameA && nameB) return nameA === nameB;
-
-  if (a.tags.bridge === "boardwalk" && b.tags.bridge === "boardwalk") return true;
-  if (a.tags.surface === "wood" && b.tags.surface === "wood") return true;
-
-  return !nameA && !nameB;
-}
-
-/** Whether two ways have endpoints close enough to be the same junction. */
-function touches(a: Way, b: Way): boolean {
-  const endsA = [a.points[0] as Point, a.points[a.points.length - 1] as Point];
-  const endsB = [b.points[0] as Point, b.points[b.points.length - 1] as Point];
-
-  return endsA.some((pa) => endsB.some((pb) => distance(pa, pb) <= JOIN_DISTANCE_M));
+export function groupsInBounds(groups: Group[], bounds: Bounds): Group[] {
+  return groups.filter((group) => boundsOverlap(group.bounds, bounds));
 }
 
 function toGroup(ways: Way[]): Group {
@@ -179,12 +106,9 @@ function toGroup(ways: Way[]): Group {
   );
 
   return {
-    // Sorted ids make the id stable regardless of input order, so a selection
-    // survives re-rendering.
-    id: ways
-      .map((w) => w.id)
-      .sort((a, b) => a - b)
-      .join("-"),
+    // The builder's group id: stable across rebuilds and independent of input
+    // order, so a selection survives re-rendering.
+    id: String((ways[0] as Way).groupId),
     title: titleOf(ways),
     ways,
     lengthM: ways.reduce((sum, way) => sum + way.lengthM, 0),

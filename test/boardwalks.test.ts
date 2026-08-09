@@ -1,16 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { confidenceOf, groupWays, parseWays } from "../src/boardwalks.js";
+import { confidenceOf, groupsInBounds, groupWays, parseWays } from "../src/boardwalks.js";
 import type { RawWay } from "../src/types.js";
 
-/** Builds a dataset way for tests. */
+/**
+ * Builds a dataset way for tests.
+ *
+ * `groupId` defaults to the way's own id, which is how the builder encodes a way
+ * that starts its own group. Pass it explicitly to put ways in one group.
+ */
 function way(
   id: number,
   tags: Record<string, string>,
   coords: [number, number][],
+  groupId = id,
 ): RawWay {
   return {
     id,
+    groupId,
     tags,
     points: coords.map(([lat, lon]) => ({ lat, lon })),
   };
@@ -64,6 +71,14 @@ describe("parseWays", () => {
 
     expect(ways.map((w) => w.id)).toEqual([1]);
   });
+
+  it("carries the builder's group id through", () => {
+    const ways = parseWays([
+      way(7, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 100), 3),
+    ]);
+
+    expect(ways[0]!.groupId).toBe(3);
+  });
 });
 
 describe("groupWays", () => {
@@ -71,30 +86,31 @@ describe("groupWays", () => {
     expect(groupWays([])).toEqual([]);
   });
 
-  it("merges segments that meet end to end", () => {
+  it("merges ways that share a group id", () => {
+    // The builder decided these belong together; the browser just collects them.
     const ways = parseWays([
-      way(1, { highway: "footway", bridge: "boardwalk" }, [
-        [53, 8],
-        [53.001, 8],
-      ]),
-      way(2, { highway: "footway", bridge: "boardwalk" }, [
-        [53.001, 8],
-        [53.002, 8],
-      ]),
+      way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 100), 1),
+      way(2, { highway: "footway", bridge: "boardwalk" }, line(53.001, 8, 100), 1),
     ]);
 
     const groups = groupWays(ways);
     expect(groups).toHaveLength(1);
     expect(groups[0]!.ways).toHaveLength(2);
-    expect(groups[0]!.lengthM).toBeGreaterThan(200);
+    expect(groups[0]!.lengthM).toBeGreaterThan(190);
+    expect(groups[0]!.id).toBe("1");
   });
 
   it("merges a whole chain of segments", () => {
     const ways = Array.from({ length: 5 }, (_, i) =>
-      way(i + 1, { highway: "footway", bridge: "boardwalk" }, [
-        [53 + i * 0.001, 8],
-        [53 + (i + 1) * 0.001, 8],
-      ]),
+      way(
+        i + 1,
+        { highway: "footway", bridge: "boardwalk" },
+        [
+          [53 + i * 0.001, 8],
+          [53 + (i + 1) * 0.001, 8],
+        ],
+        1,
+      ),
     );
 
     const groups = groupWays(parseWays(ways));
@@ -102,16 +118,9 @@ describe("groupWays", () => {
     expect(groups[0]!.ways).toHaveLength(5);
   });
 
-  it("keeps far-apart paths separate", () => {
-    const ways = parseWays([
-      way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 200)),
-      way(2, { highway: "footway", bridge: "boardwalk" }, line(53.4, 8.4, 200)),
-    ]);
-
-    expect(groupWays(ways)).toHaveLength(2);
-  });
-
-  it("does not merge touching ways with different names", () => {
+  it("keeps ways with different group ids apart, however close they are", () => {
+    // Touching but separately grouped: the builder ruled on this, e.g. because
+    // the names differ, and the browser must not second-guess it.
     const ways = parseWays([
       way(1, { highway: "footway", surface: "wood", name: "Moorsteg" }, [
         [53, 8],
@@ -154,18 +163,18 @@ describe("groupWays", () => {
   });
 
   it("gives the same id regardless of input order", () => {
-    const a = way(1, { highway: "footway", bridge: "boardwalk" }, [
-      [53, 8],
-      [53.001, 8],
-    ]);
-    const b = way(2, { highway: "footway", bridge: "boardwalk" }, [
-      [53.001, 8],
-      [53.002, 8],
-    ]);
+    const a = way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 100), 1);
+    const b = way(
+      2,
+      { highway: "footway", bridge: "boardwalk" },
+      line(53.001, 8, 100),
+      1,
+    );
 
     const idOf = (ways: RawWay[]) => groupWays(parseWays(ways))[0]!.id;
 
     expect(idOf([a, b])).toBe(idOf([b, a]));
+    expect(idOf([a, b])).toBe("1");
   });
 
   it("names a group after its way, or falls back to a label", () => {
@@ -181,20 +190,90 @@ describe("groupWays", () => {
   });
 
   it("stays fast with a lot of ways", () => {
-    // The grid lookup avoids comparing all pairs, which at 1500 ways would be
-    // over a million comparisons.
-    const ways = Array.from({ length: 1500 }, (_, i) =>
+    // Bucketing by group id is a single pass, where the union-find over endpoint
+    // distances this replaced cost 38 ms for the real 15,256 ways.
+    const ways = Array.from({ length: 15_000 }, (_, i) =>
       way(
         i + 1,
         { highway: "footway", bridge: "boardwalk" },
-        line(53 + i * 0.01, 8 + i * 0.01, 100),
+        line(53 + i * 0.0001, 8, 100),
+        // Pairs share a group, so this also exercises the merging path.
+        Math.floor(i / 2) * 2 + 1,
       ),
     );
 
     const started = Date.now();
     const groups = groupWays(parseWays(ways));
 
-    expect(groups).toHaveLength(1500);
+    expect(groups).toHaveLength(7500);
     expect(Date.now() - started).toBeLessThan(3000);
+  });
+});
+
+describe("groupsInBounds", () => {
+  /** A chain of five 100 m segments running north from `lat`, in one group. */
+  function chain(lat: number, lon: number, firstId = 1): RawWay[] {
+    return Array.from({ length: 5 }, (_, i) =>
+      way(
+        firstId + i,
+        { highway: "footway", bridge: "boardwalk" },
+        [
+          [lat + (i * 100) / 111_320, lon],
+          [lat + ((i + 1) * 100) / 111_320, lon],
+        ],
+        firstId,
+      ),
+    );
+  }
+
+  it("keeps a partly visible group whole, at its full length", () => {
+    // The bug this replaced: grouping the ways in view rebuilt the group from a
+    // fragment, so way/18963200 reported 3219 m at full extent but 1590 m with
+    // half of it off screen, and sometimes split into two cards.
+    const all = groupWays(parseWays(chain(53, 8)));
+    expect(all).toHaveLength(1);
+    const full = all[0]!;
+
+    // A box covering only the southern fifth of the group.
+    const sliver = {
+      minLat: 52.9,
+      minLon: 7.9,
+      maxLat: 53 + 50 / 111_320,
+      maxLon: 8.1,
+    };
+
+    const inView = groupsInBounds(all, sliver);
+    expect(inView).toHaveLength(1);
+    expect(inView[0]!.lengthM).toBe(full.lengthM);
+    expect(inView[0]!.ways).toHaveLength(5);
+    expect(inView[0]!.id).toBe(full.id);
+  });
+
+  it("drops groups whose box is outside the view", () => {
+    const groups = groupWays(parseWays([...chain(53, 8), ...chain(48, 9, 100)]));
+    const view = { minLat: 52.9, minLon: 7.9, maxLat: 53.1, maxLon: 8.1 };
+
+    expect(groupsInBounds(groups, view)).toHaveLength(1);
+  });
+
+  it("keeps a group that crosses the view with both ends outside", () => {
+    // Every point lies outside the box, so a point-in-box test would drop it.
+    const groups = groupWays(
+      parseWays([
+        way(1, { highway: "footway", bridge: "boardwalk" }, [
+          [53, 7],
+          [53, 9],
+        ]),
+      ]),
+    );
+    const view = { minLat: 52.9, minLon: 7.9, maxLat: 53.1, maxLon: 8.1 };
+
+    expect(groupsInBounds(groups, view)).toHaveLength(1);
+  });
+
+  it("returns nothing when there are no groups", () => {
+    expect(groupsInBounds([], { minLat: 52, minLon: 7, maxLat: 54, maxLon: 9 })).toEqual(
+      [],
+    );
   });
 });

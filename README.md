@@ -70,16 +70,18 @@ The code is deliberately small. In rough order of interest:
 | ------------------- | ------------------------------------------------------- |
 | `src/types.ts`      | The data types. Start here.                              |
 | `src/config.ts`     | Tunable values: dataset URL, zoom threshold, list cap.   |
-| `src/dataset.ts`    | Loads the dataset and filters it to the viewport.        |
-| `src/boardwalks.ts` | The interesting part: label, group and sort the ways.    |
+| `src/dataset.ts`    | Loads the dataset.                                       |
+| `src/boardwalks.ts` | Label, group, sort and clip to view.                     |
 | `src/geo.ts`        | Distance maths and number formatting.                    |
 | `src/map.ts`        | All Leaflet-specific code.                               |
 | `src/main.ts`       | Wires the DOM to the above.                              |
 
-Plus `tools/build-dataset/main.go`, which produces the dataset.
+Plus `tools/build-dataset/`, which produces the dataset and decides both what
+counts as a boardwalk and which ways belong together.
 
-The data flow is: `boardwalks.json` → `waysInBounds` → `parseWays` → `groupWays`
-→ render.
+The data flow is: `boardwalks.json` → `parseWays` → `groupWays` →
+`groupsInBounds` → render. Grouping happens once for the whole country, the
+viewport filter runs on finished groups.
 
 ### Why a prebuilt dataset
 
@@ -88,8 +90,8 @@ that took a median of 2.9 s, ranging from 0.6 s to a timeout, because public
 instances are shared and their load is unpredictable. Racing two mirrors helped
 but did not fix it.
 
-All boardwalk candidates in Germany come to 48,000 ways. After dropping paths
-under 25 m the file holds 15,256 ways at 0.54 MB gzipped — small enough to ship
+All boardwalk candidates in Germany come to 51,000 ways. After dropping paths
+under 25 m the file holds 15,283 ways at 0.56 MB gzipped — small enough to ship
 as a static file.
 
 The dataset is as old as the last rebuild. For boardwalks that is fine.
@@ -106,15 +108,48 @@ because paths get split into many short segments. Filtering ways individually
 would have deleted 725 boardwalks that are over 25 m once joined, losing 60.7 km
 of real path.
 
-That means `tools/build-dataset` needs the same grouping logic as the browser
-(`group.go` mirrors `connectedComponents` in `src/boardwalks.ts`). The two were
-checked against each other on the full dataset: both keep exactly the same 15,256
-ways.
+### Who groups the ways
+
+The builder does, and it writes the answer into the file: every way carries the
+id of its group (`c`, the smallest OSM way id in that group). The browser buckets
+ways by that field and never decides adjacency itself.
+
+This used to be a second implementation of the same union-find over endpoint
+distances, in `src/boardwalks.ts`, that had to be kept in step with `group.go` by
+hand. Shipping the id instead:
+
+- removes the duplication — `connectedComponents`, `samePath` and `touches` now
+  exist only in Go;
+- cuts the browser's grouping from 29 ms to 12 ms on the real 15,283 ways;
+- costs 25 KB gzipped, 4.5% of the file, measured by stripping the field from the
+  same data and re-compressing.
+
+The two were checked against each other before the browser copy was deleted: the
+shipped ids reproduce the union-find's 8357 groups **exactly**, with no group
+appearing in one and not the other.
+
+The trade-off is that a change to the joining rules needs `npm run data` to take
+effect. That was already true of the length filter, which the builder applies.
 
 ### Viewport rendering
 
-Every pan and zoom redraws whatever falls inside the visible area, which 
+Every pan and zoom redraws whatever falls inside the visible area, which
 is cheap once the dataset is in memory.
+
+Grouping runs **once**, over the whole dataset, and only the finished groups are
+filtered to the viewport. Doing it the other way round — filter, then group —
+assembled each group from just the ways on screen, so the same boardwalk changed
+length as the map moved and could split into two cards. Measured on
+`way/18963200`, a 3219 m network of 16 ways: with half of it off screen it
+reported 1590 m, and at one clipping it appeared as two entries. Since the length
+is the only sort key, the list order moved with the map too.
+
+The cost went the right way. Assembling all 15,283 ways into groups measures
+12 ms, once, inside the loading indicator; the per-pan work drops from re-grouping
+(0.5 ms in a village, 1.4 ms over Hamburg) to a bounding-box test per group at
+0.1 ms. First load measured 95–119 ms before and about 167 ms after. The map draws
+the same number of lines either way — 1016 over Hamburg at zoom 9 — because a
+group is only drawn when its box is in view.
 
 Outside the covered region the app says so instead of "no boardwalks here" —
 that would claim OSM has none, when really the dataset just stops at the border.
@@ -157,13 +192,14 @@ that is 15,209 high, 4 medium and 43 low.
 ### Grouping
 
 OSM often splits one path into several ways — the median way in the dataset is
-just 10 m long. `groupWays` merges ways that touch (endpoints within 20 m) and
+just 10 m long. The builder merges ways that touch (endpoints within 20 m) and
 look like the same path. Differently named ways are never merged, even where
 they meet.
 
-Only ways whose endpoints fall into the same grid cell are compared, so a wide
-viewport containing thousands of ways stays fast.
-
+Only ways whose endpoints fall into the same grid cell are compared, so grouping
+all 51,000 candidates stays linear rather than quadratic. See
+[Who groups the ways](#who-groups-the-ways) for why the browser no longer repeats
+this.
 
 ## Deploying
 
@@ -179,8 +215,8 @@ Two things make this work without further configuration:
 - `base: "./"` in `vite.config.ts`, so assets resolve relative to the page. The
   usual failure mode for project pages is absolute `/assets/...` paths, which
   404 under a subpath.
-- GitHub Pages serves JSON gzipped, so the 2.5 MB dataset goes over the wire at
-  0.54 MB. Verified against a live Pages site: `content-encoding: gzip`.
+- GitHub Pages serves JSON gzipped, so the 2.6 MB dataset goes over the wire at
+  0.56 MB. Verified against a live Pages site: `content-encoding: gzip`.
 
 Pages limits are 1 GB per site and 100 GB of traffic per month, both far above
 what this needs. The deploy workflow runs `npm run check` first, so a failing

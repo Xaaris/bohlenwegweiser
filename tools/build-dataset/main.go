@@ -143,6 +143,10 @@ type outWay struct {
 	N string            `json:"n,omitzero"` // name
 	T map[string]string `json:"t,omitzero"` // the kept tags
 	G [][2]float64      `json:"g"`          // geometry as [lat, lon] pairs
+	// Group id: the smallest way id in this way's group. Omitted when it equals
+	// I, so the field only appears on ways that join a lower-numbered one. The
+	// browser groups by this instead of recomputing the components.
+	C int64 `json:"c,omitzero"`
 }
 
 func main() {
@@ -194,7 +198,7 @@ func run(out, from, save string) error {
 	// paths into short segments, so filtering them individually would delete 725
 	// boardwalks that are long enough once joined.
 	beforeLength := len(ways)
-	ways = keepLongEnough(ways, minLengthM)
+	ways, groupCount := groupAndFilter(ways, minLengthM)
 	if len(ways) == 0 {
 		return fmt.Errorf("no ways left after the length filter")
 	}
@@ -220,6 +224,7 @@ func run(out, from, save string) error {
 	log.Printf("  dropped, duplicate:   %d", st.duplicate)
 	log.Printf("  dropped, group < %.0fm: %d", minLengthM, beforeLength-len(ways))
 	log.Printf("ways written:           %d", len(ways))
+	log.Printf("groups:                 %d", groupCount)
 	log.Printf("%s: %.2f MB (roughly a fifth of that gzipped)",
 		out, float64(size)/(1<<20))
 
