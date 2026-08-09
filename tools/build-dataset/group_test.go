@@ -85,26 +85,45 @@ func TestGroupAndFilterDropsShortGroups(t *testing.T) {
 	}
 }
 
-func TestGroupAndFilterRespectsNames(t *testing.T) {
-	// Two 15 m ways that touch but carry different names: they are different
-	// paths, so neither reaches 25 m and both go.
+// Names no longer affect grouping. This assertion is the inverse of what it was:
+// the builder used to refuse to join two named ways whose names differed, which
+// measured 137 blocked pairs, none of them convincing. "Steg West" and "Steg Ost"
+// are two fingers of one jetty, and five of seven sampled pairs share an OSM node.
+func TestGroupAndFilterIgnoresNames(t *testing.T) {
+	// Two 15 m ways that touch and carry *different* names. Together they are a
+	// 30 m network, so both survive the 25 m minimum.
 	a := testWay(1, 53.0, 8.0, 15, map[string]string{"highway": "footway", "surface": "wood"})
 	a.N = "Moorsteg"
 	b := testWay(2, 53.0+15/111_320, 8.0, 15, map[string]string{"highway": "footway", "surface": "wood"})
 	b.N = "Holzsteg"
 
-	if kept, _ := groupAndFilter([]outWay{a, b}, 25); len(kept) != 0 {
-		t.Errorf("kept %v, want none: differently named ways must not be joined", ids(kept))
-	}
-
-	// Same name: they join into 30 m and both stay.
-	b.N = "Moorsteg"
 	kept, groups := groupAndFilter([]outWay{a, b}, 25)
 	if len(kept) != 2 {
-		t.Errorf("kept %v, want both: same-named touching ways form one path", ids(kept))
+		t.Errorf("kept %v, want both: touching ways form one network whatever they are called",
+			ids(kept))
 	}
 	if groups != 1 {
 		t.Errorf("groups = %d, want 1", groups)
+	}
+
+	// Same name behaves identically, which is the point: the name is not consulted.
+	b.N = "Moorsteg"
+	kept, groups = groupAndFilter([]outWay{a, b}, 25)
+	if len(kept) != 2 || groups != 1 {
+		t.Errorf("kept %v in %d groups, want 2 in 1", ids(kept), groups)
+	}
+}
+
+// Differing tags do not block a join either. The old samePath had branches for
+// bridge=boardwalk and surface=wood, but they rejected nothing in the real data.
+func TestGroupAndFilterIgnoresTagDifferences(t *testing.T) {
+	a := testWay(1, 53.0, 8.0, 15, map[string]string{"highway": "footway", "bridge": "boardwalk"})
+	b := testWay(2, 53.0+15/111_320, 8.0, 15, map[string]string{"highway": "path", "surface": "wood"})
+
+	kept, groups := groupAndFilter([]outWay{a, b}, 25)
+	if len(kept) != 2 || groups != 1 {
+		t.Errorf("kept %v in %d groups, want 2 in 1: proximity is the only test",
+			ids(kept), groups)
 	}
 }
 

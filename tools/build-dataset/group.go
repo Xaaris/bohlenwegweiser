@@ -18,10 +18,7 @@
 
 package main
 
-import (
-	"math"
-	"strings"
-)
+import "math"
 
 // Vertices closer than this count as the same junction.
 //
@@ -77,14 +74,29 @@ func groupAndFilter(ways []outWay, minLengthM float64) ([]outWay, int) {
 	return kept, groupCount
 }
 
-// connectedComponents groups indices of ways that touch and look like the same
-// path.
+// connectedComponents groups indices of ways that meet.
+//
+// Proximity is the only test. There used to be a samePath() check that refused to
+// join two named ways whose names differed, on the theory that different names
+// mean different paths. Measured against the real data it was the only constraint
+// that ever fired (137 pairs blocked by names, 0 by its tag branches) and it was
+// mostly wrong: "Steg West"/"Steg Ost" are two fingers of one jetty,
+// "Strandübergang 17" leads onto the "Dünenpromenade", "Quellentalbrücke" and
+// "Zollhausbrücke" are consecutive spans of one crossing. Five of seven sampled
+// pairs share an OSM node outright, so they are physically connected; the other
+// two are within a few metres.
 //
 // Every vertex counts as a possible junction, not just the two endpoints. OSM
 // frequently splits a way so that one *ends in the middle of another* — a side
 // branch off a boardwalk, a jetty off a walkway — and comparing endpoints alone
 // left those as separate networks. Direction is deliberately ignored: a branch
 // meeting a path at a right angle is still part of the same network.
+//
+// `layer` looks like it should stop a bridge crossing *over* a boardwalk from
+// joining it, and it is in the raw Overpass response. It is not usable: 2472 pairs
+// share an exact coordinate while differing in layer, including ways with the same
+// name, because a ramp onto a bridge legitimately changes layer. A shared node
+// means you can walk from one to the other, whatever the layer says.
 //
 // Vertices are indexed in a grid whose cells are two join distances wide, so two
 // vertices within joinDistanceM always land in the same or an adjacent cell. That
@@ -111,8 +123,8 @@ func connectedComponents(ways []outWay) [][]int {
 	}
 
 	grid := make(map[cell][]vertex, total)
-	for i, w := range ways {
-		for _, p := range w.G {
+	for i := range ways {
+		for _, p := range ways[i].G {
 			c := cellOf(p)
 			grid[c] = append(grid[c], vertex{way: i, point: p})
 		}
@@ -139,8 +151,8 @@ func connectedComponents(ways []outWay) [][]int {
 		}
 	}
 
-	for i, w := range ways {
-		for _, p := range w.G {
+	for i := range ways {
+		for _, p := range ways[i].G {
 			c := cellOf(p)
 			// The point's own cell and the eight around it.
 			for dLat := -1; dLat <= 1; dLat++ {
@@ -153,7 +165,7 @@ func connectedComponents(ways []outWay) [][]int {
 						if find(v.way) == find(i) {
 							continue
 						}
-						if distance(p, v.point) <= joinDistanceM && samePath(w, ways[v.way]) {
+						if distance(p, v.point) <= joinDistanceM {
 							union(i, v.way)
 						}
 					}
@@ -173,27 +185,6 @@ func connectedComponents(ways []outWay) [][]int {
 		out = append(out, members)
 	}
 	return out
-}
-
-// samePath reports whether two ways plausibly belong to the same path.
-func samePath(a, b outWay) bool {
-	nameA := strings.ToLower(strings.TrimSpace(a.N))
-	nameB := strings.ToLower(strings.TrimSpace(b.N))
-
-	// Different names are a strong hint these are different paths, even where
-	// they meet.
-	if nameA != "" && nameB != "" {
-		return nameA == nameB
-	}
-
-	if a.T["bridge"] == "boardwalk" && b.T["bridge"] == "boardwalk" {
-		return true
-	}
-	if a.T["surface"] == "wood" && b.T["surface"] == "wood" {
-		return true
-	}
-
-	return nameA == "" && nameB == ""
 }
 
 func lineLength(points [][2]float64) float64 {

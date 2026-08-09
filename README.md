@@ -91,7 +91,7 @@ instances are shared and their load is unpredictable. Racing two mirrors helped
 but did not fix it.
 
 All boardwalk candidates in Germany come to 51,000 ways. After dropping paths
-under 25 m the file holds 15,687 ways at 0.57 MB gzipped — small enough to ship
+under 25 m the file holds 15,728 ways at 0.57 MB gzipped — small enough to ship
 as a static file.
 
 The dataset is as old as the last rebuild. For boardwalks that is fine.
@@ -118,9 +118,9 @@ This used to be a second implementation of the same union-find over endpoint
 distances, in `src/boardwalks.ts`, that had to be kept in step with `group.go` by
 hand. Shipping the id instead:
 
-- removes the duplication — `connectedComponents`, `samePath` and `touches` now
-  exist only in Go;
-- cuts the browser's grouping from 29 ms to 10 ms on the real 15,687 ways;
+- removes the duplication — the union-find over vertex distances now exists only
+  in Go;
+- cuts the browser's grouping from 29 ms to 10 ms on the real 15,728 ways;
 - costs 25 KB gzipped, 4.5% of the file, measured by stripping the field from the
   same data and re-compressing.
 
@@ -144,7 +144,7 @@ length as the map moved and could split into two cards. Measured on
 reported 1590 m, and at one clipping it appeared as two entries. Since the length
 is the only sort key, the list order moved with the map too.
 
-The cost went the right way. Assembling all 15,687 ways into groups measures
+The cost went the right way. Assembling all 15,728 ways into groups measures
 10 ms, once, inside the loading indicator; the per-pan work drops from re-grouping
 (0.5 ms in a village, 1.4 ms over Hamburg) to a bounding-box test per group at
 0.1 ms. First load measured 95–119 ms before and about 167 ms after. The map draws
@@ -248,9 +248,8 @@ _Straße_ is a street whatever it is called.
 ### Grouping
 
 OSM often splits one path into several ways — the median way in the dataset is
-just 10 m long. The builder merges ways that come within 20 m of each other and
-look like the same path. Differently named ways are never merged, even where
-they meet.
+just 10 m long. The builder merges any two ways that come within 20 m of each
+other. Proximity is the only test.
 
 Proximity is tested between **all vertices**, not just the two endpoints of each
 way. OSM routinely splits a way so that one *ends in the middle of another* — a
@@ -267,6 +266,35 @@ Direction is deliberately ignored — a branch meeting a path at a right angle i
 still part of the same network, so there is no angle test. Two ways that merely
 cross without sharing a vertex are not joined, because OSM models a real junction
 with a shared node.
+
+**Names used to block a join** and no longer do. The rule was that two named ways
+whose names differ are different paths. It sounded reasonable and was measured to
+be the only constraint that ever fired — 137 pairs blocked by names, 0 by the tag
+branches beside it — and it was mostly wrong:
+
+```
+"Steg West"          <->  "Steg Ost"            two fingers of one jetty
+"Strandübergang 17"  <->  "Dünenpromenade"     a crossing onto the promenade
+"Quellentalbrücke"   <->  "Zollhausbrücke"      consecutive spans of one crossing
+"Baumwipfelpfad"     <->  "Baumwipfelpfad Harz"  one treetop walk
+"Parc éco-Pédagogique" <-> "Parc Eco-Pédagogique" the same name, one accent apart
+```
+
+Checked seven pairs against the OSM API: five **share a node**, so they are
+physically connected and joining them is simply correct. Dropping the rule merged
+27 groups. With it gone, `samePath` had nothing left to do and was deleted rather
+than left as a function that always returns true.
+
+`layer` looks like it should keep a bridge crossing *over* a boardwalk separate,
+and it is in the raw response. It is not usable: **2472 pairs share an exact
+coordinate while differing in layer**, including ways with identical names, because
+a ramp onto a bridge legitimately changes layer. A shared node means you can walk
+from one to the other, whatever the layer says.
+
+One side effect worth knowing: a group is titled after its lowest-numbered named
+way, so the 2.6 km beach network at Grömitz is listed as "Strandübergang 4" even
+though it contains eight crossings and two promenades. Not wrong, but not the name
+a local would use.
 
 Only vertices in the same or an adjacent grid cell are compared, so grouping all
 51,000 candidates stays near-linear: the whole build takes 0.8 s. See

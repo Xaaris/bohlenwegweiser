@@ -122,8 +122,10 @@ var relevantHighways = []string{
 	"footway", "path", "cycleway", "bridleway", "pedestrian", "steps", "track",
 }
 
-// Tags the UI needs: enough for confidenceOf(), samePath(), titleOf() and the
-// tag pills on a result card. Everything else is dropped.
+// Tags the UI needs: enough for confidenceOf(), titleOf() and the tag pills on a
+// result card. Everything else is dropped.
+//
+// Grouping needs none of them any more, so this list is purely about display.
 var keepTags = []string{
 	"highway", "man_made", "bridge", "surface", "boardwalk", "footway",
 }

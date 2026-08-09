@@ -13,14 +13,14 @@ dataset. Deployed to GitHub Pages at
 `src/types.ts` — read that file first.
 
 Key design decision: there is **no runtime Overpass query**. The whole German
-dataset (~0.57 MB gzipped, 15,687 ways) is fetched once and filtered in memory
+dataset (~0.57 MB gzipped, 15,728 ways) is fetched once and filtered in memory
 on every pan/zoom. Do not reintroduce per-search network calls.
 
 Second decision, easy to undo by accident: **grouping happens once, over the
 whole dataset**, and the viewport filter (`groupsInBounds`) runs on finished
 groups. Filtering ways first and then grouping rebuilt each group from whatever
 was on screen, so `way/18963200` reported 3219 m at full extent and 1590 m with
-half of it off screen, and sometimes appeared as two cards. Bucketing all 15,687
+half of it off screen, and sometimes appeared as two cards. Bucketing all 15,728
 ways by their group id costs 10 ms once; the box test per pan is 0.1 ms.
 
 ## Duplicated logic that must stay in sync
@@ -50,9 +50,17 @@ the copy dropped 0 of 15,256 ways, so it was removed. `confidenceOf`
 (`src/boardwalks.ts`) only *grades* the tags into the labels the UI shows — add a
 tag to `boardwalkTags` and it usually wants a case there too.
 
-Joining lives only in the builder too (`joinDistanceM`, `samePath`,
-`connectedComponents` in `group.go`). Changing any of them needs `npm run data`
-to take effect — the browser cannot recompute it.
+Joining lives only in the builder too (`joinDistanceM`, `connectedComponents` in
+`group.go`). Changing either needs `npm run data` to take effect — the browser
+cannot recompute it.
+
+**Proximity is the only join test.** A `samePath` check used to refuse to join two
+named ways whose names differed; measured, it blocked 137 pairs and its tag
+branches blocked 0, and the blocked pairs were things like "Steg West"/"Steg Ost"
+and "Strandübergang 17"/"Dünenpromenade" — five of seven sampled pairs share an
+OSM node. Don't reintroduce a name or tag similarity test. Don't reach for `layer`
+either: 2472 pairs share a coordinate while differing in layer, same-named ways
+included, because a ramp onto a bridge changes layer.
 
 `connectedComponents` compares **every vertex**, not just endpoints: OSM splits
 ways so one ends mid-way through another, and endpoints-only left 303 real

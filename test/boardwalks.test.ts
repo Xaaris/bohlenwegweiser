@@ -119,8 +119,9 @@ describe("groupWays", () => {
   });
 
   it("keeps ways with different group ids apart, however close they are", () => {
-    // Touching but separately grouped: the builder ruled on this, e.g. because
-    // the names differ, and the browser must not second-guess it.
+    // Touching but separately grouped: whatever the builder decided, the browser
+    // must not second-guess it. Only the builder knows why two neighbours are
+    // separate — most often that they are simply more than 20 m apart somewhere.
     const ways = parseWays([
       way(1, { highway: "footway", surface: "wood", name: "Moorsteg" }, [
         [53, 8],
@@ -133,6 +134,38 @@ describe("groupWays", () => {
     ]);
 
     expect(groupWays(ways)).toHaveLength(2);
+  });
+
+  it("merges touching ways with different names when the builder grouped them", () => {
+    // The inverse of an assertion this file used to make. Differing names no
+    // longer block a join: "Steg West" and "Steg Ost" are one jetty, and the old
+    // rule blocked 137 such pairs. The group takes the name of its first named
+    // way, so the title is one of the two.
+    const ways = parseWays([
+      way(
+        1,
+        { highway: "footway", surface: "wood", name: "Steg West" },
+        [
+          [53, 8],
+          [53.001, 8],
+        ],
+        1,
+      ),
+      way(
+        2,
+        { highway: "footway", surface: "wood", name: "Steg Ost" },
+        [
+          [53.001, 8],
+          [53.002, 8],
+        ],
+        1,
+      ),
+    ]);
+
+    const groups = groupWays(ways);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.ways).toHaveLength(2);
+    expect(groups[0]!.title).toBe("Steg West");
   });
 
   it("puts the longest group first", () => {
