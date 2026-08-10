@@ -266,10 +266,13 @@ select {
   font-weight: 700;
 }
 
-/* One colour per kind, matching LINE_STYLES in map.ts by hand: the map and the
- * card have to agree, and CSS variables are not readable from JS. Boardwalks and
- * piers get the strong browns; bridges and stairs are the cooler and lighter
- * tones, because they are short structures rather than a walk. */
+/* One colour per kind. These are the *only* place kind is encoded as colour: map
+ * lines are all one brown, because the difference is invisible at real zooms and
+ * there is no legend out there. Here the colour sits next to its own label, so it
+ * reads as a grouping cue rather than a code to decode.
+ *
+ * Boardwalks and piers get the strong browns; bridges and stairs the cooler and
+ * lighter tones, being short structures rather than a walk. */
 .pill.boardwalk {
   color: #fff;
   background: var(--bark);

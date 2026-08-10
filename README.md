@@ -227,9 +227,9 @@ of them are not one:
 | wooden stairs | _Holztreppe_ | 572 | 41 m |
 
 A 40 m wooden bridge over a stream is not a boardwalk, and neither is a flight of
-steps. Each group now carries a `kind`, shown as the first pill on its card and as
-the line colour on the map. Nothing is excluded — a 443 m wooden staircase is
-worth seeing, it just should not claim to be a Bohlenweg.
+steps. Each group now carries a `kind`, shown on its card and in the map tooltip.
+Nothing is excluded — a 443 m wooden staircase is worth seeing, it just should not
+claim to be a Bohlenweg.
 
 `surface=wood` cannot make this distinction: it covers 100% of the bridges, 100%
 of the stairs and 97% of the piers. `highway` and `bridge` can, and both were
@@ -255,10 +255,44 @@ length, the Schwedenlöcher 97% stairs, Neue Seebrücke 69% pier.
 This also fixed `titleOf`, which called an unnamed wooden bridge
 "Holzweg (unbenannt)" — 2411 groups now read "Holzbrücke (unbenannt)" instead.
 
+A card lists **every** kind the group is made of, longest first, with a percentage
+once there is more than one: _Moorrundweg Pietzmoor_ reads "Bohlenweg 59% ·
+Holzbrücke 41%". Kinds under `MIN_KIND_SHARE` (10%) are left out, because a
+"Holztreppe" pill for 7 m of steps onto a 400 m boardwalk is noise — in 512 of the
+1577 mixed groups every extra kind is below that floor. The result: 87% of cards
+show one kind pill, 12.6% show two, and 58 groups show three or four.
+
 The old _Sicher_ / _Wahrscheinlich_ / _Unsicher_ confidence label is gone. It was
 derived from the same tags and had stopped saying anything useful: 8006 of 8022
 groups were "Sicher", because `surface=wood` alone earned the top grade. Naming
 the structure is the honest version of what it was trying to convey.
+
+### Why every line is the same colour
+
+Lines were briefly coloured per kind. That was wrong twice over: there was no
+legend, so five colours meant nothing to the reader, and the distinction is
+invisible at the zooms people actually use. Measured:
+
+| | |
+| --- | --- |
+| groups that are a single kind | 80.3% |
+| median minority stretch in a mixed group | 10.7 m |
+| that stretch at zoom 14, where _Mein Standort_ lands | **1.9 px** |
+| minority stretches at least 8 px wide at zoom 14 | 10.2% |
+
+Colouring per way would have spent the whole colour channel on something usually
+too small to see, and when it did show it would read as a rendering artefact. It
+would also have broken selection, which recolours a whole group to say "this is
+one network" — the idea the whole app is built around.
+
+So the map draws one brown for everything, rust for the selected group, and the
+kind goes where there is room for a word: the card, and the tooltip
+("Moorrundweg Pietzmoor · Bohlenweg · 2,0 km").
+
+**No dashed lines.** Dashes were tried for bridges and stairs and read as
+"uncertain" or "proposed", which is exactly wrong — those are the most explicitly
+tagged features in the file. A `6 6` dash on the median way is also a single dot:
+the median way is 29 m, which is 5 px at zoom 14.
 
 ### Which names count
 

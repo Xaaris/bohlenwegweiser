@@ -71,6 +71,15 @@ export type Group = {
   lengthM: number;
   /** The kind that accounts for most of the group's length. */
   kind: Kind;
+  /**
+   * Every kind the group is made of, longest first, as a share of its length.
+   *
+   * The card lists these, because a fifth of groups are more than one thing and
+   * the map cannot show it: the median minority stretch is 10.7 m, under 2 px at
+   * zoom 14. Kinds too small to be worth a word are already filtered out, so
+   * this is usually one entry and never more than a handful.
+   */
+  composition: { kind: Kind; share: number }[];
   bounds: Bounds;
   /** Compact `key=value` list shown on the result card. */
   tagSummary: string[];

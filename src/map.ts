@@ -8,25 +8,30 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+import { KIND_LABELS } from "./boardwalks.js";
 import { DEFAULT_CENTER, DEFAULT_ZOOM, TILE_ATTRIBUTION, TILE_URL } from "./config.js";
 import { formatDistance } from "./geo.js";
-import type { Bounds, Group, Kind, Point } from "./types.js";
+import type { Bounds, Group, Point } from "./types.js";
 
-/* Line colours follow the logo's wood brown, with distinguishable tones per kind.
- * Kept in step with the palette in styles.css by hand, since CSS variables are not
- * readable from here.
+/* One colour for every result, the logo's wood brown.
  *
- * Boardwalks and piers — the things people come here for — get the two strongest
- * browns. Bridges and stairs are dashed, because they are short structures rather
- * than something you walk along, and 3809 of 8022 groups are one or the other. */
-const LINE_STYLES: Record<Kind, L.PolylineOptions> = {
-  boardwalk: { color: "#532d14", weight: 5, opacity: 0.9 },
-  pier: { color: "#8a6a3f", weight: 5, opacity: 0.88 },
-  path: { color: "#6b4423", weight: 5, opacity: 0.88 },
-  bridge: { color: "#197278", weight: 4, opacity: 0.85, dashArray: "6 6" },
-  steps: { color: "#8a5a10", weight: 4, opacity: 0.85, dashArray: "3 5" },
-};
+ * Lines used to be coloured per kind, which was a mistake twice over: there was
+ * no legend, so five colours meant nothing to the reader, and the distinction is
+ * invisible at the zooms people use anyway. 80% of groups are a single kind, and
+ * the median minority stretch inside a mixed group is 10.7 m — 1.9 px at zoom 14,
+ * where "Mein Standort" lands. The kind belongs on the card and in the tooltip,
+ * where there is room for a word.
+ *
+ * Solid, never dashed. Dashes read as "uncertain" or "proposed", which is wrong
+ * for the most explicitly tagged features in the file, and a 6-6 dash on the
+ * median 5 px way renders as a single dot.
+ *
+ * Kept in step with the palette in styles.css by hand, since CSS variables are
+ * not readable from here. */
+const LINE_STYLE: L.PolylineOptions = { color: "#532d14", weight: 5, opacity: 0.9 };
 
+/* Rust, the one colour that is not in the wood family. With a single line colour
+ * in play this contrast does more work than it did before. */
 const SELECTED_STYLE: L.PolylineOptions = { color: "#a44a3f", weight: 7, opacity: 0.96 };
 
 export type MapCallbacks = {
@@ -124,12 +129,15 @@ export class BoardwalkMap {
       const layers = group.ways.map((way) => {
         const line = L.polyline(
           way.points.map((p) => [p.lat, p.lon] as [number, number]),
-          LINE_STYLES[group.kind],
+          LINE_STYLE,
         );
 
-        line.bindTooltip(`${group.title} · ${formatDistance(group.lengthM)}`, {
-          sticky: true,
-        });
+        // The kind goes here rather than into the line colour: a tooltip has room
+        // for a word and needs no legend to decode.
+        line.bindTooltip(
+          `${group.title} · ${KIND_LABELS[group.kind]} · ${formatDistance(group.lengthM)}`,
+          { sticky: true },
+        );
         line.on("click", (event) => {
           L.DomEvent.stopPropagation(event);
           this.onGroupClick(group.id);
@@ -152,8 +160,8 @@ export class BoardwalkMap {
 
   /** Highlights one group, optionally zooming to it. */
   select(groupId: string | null, zoomTo = false): void {
-    for (const [id, { group, layers }] of this.lines) {
-      const style = id === groupId ? SELECTED_STYLE : LINE_STYLES[group.kind];
+    for (const [id, { layers }] of this.lines) {
+      const style = id === groupId ? SELECTED_STYLE : LINE_STYLE;
       for (const layer of layers) {
         layer.setStyle(style);
         if (id === groupId) layer.bringToFront();

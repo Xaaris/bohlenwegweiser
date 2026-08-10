@@ -71,10 +71,9 @@ network. Don't raise `joinDistanceM` either; 20 m already covers 69% of joins
 
 Two more copies that are *not* Go-related and get missed:
 
-- Line colours in `LINE_STYLES` (`src/map.ts`) are hard-coded hex because CSS
-  variables aren't readable from JS. Keep them in step with the palette in
-  `src/styles.css`, and with the `.pill.<kind>` rules — the map line and the card
-  pill for one kind are meant to be the same colour.
+- Line colours in `LINE_STYLE`/`SELECTED_STYLE` (`src/map.ts`) are hard-coded hex
+  because CSS variables aren't readable from JS. Keep them in step with the
+  palette in `src/styles.css`.
 - `boardwalkNames` (exact, builds the query) and `nameFragments` (substring,
   filters the response) in `main.go` are two halves of one rule: a new word needs
   to be in **both** or it is either never fetched or fetched and discarded.
@@ -117,6 +116,17 @@ Length filtering runs on **groups, not individual ways** — the median OSM way 
   kind is the one covering most of the group's *length* (1577 groups mix kinds),
   `man_made=pier` beats any bridge tag, and nothing is excluded — that was a
   deliberate product call, so don't start dropping kinds in the builder.
+- **Every map line is the same brown, solid, and only the selection is rust.**
+  Per-kind colours were tried and removed: there was no legend, and the median
+  minority stretch in a mixed group is 10.7 m, which is 1.9 px at zoom 14. Don't
+  reintroduce per-kind or per-way colours without a legend and a measurement, and
+  don't use dashes — they read as "uncertain" for the most explicitly tagged
+  features in the file, and vanish on a 5 px line. The kind belongs on the card
+  (`group.composition`) and in the tooltip.
+- **The card lists every kind above `MIN_KIND_SHARE`,** longest first, with a
+  percentage when there are two or more. The floor exists because 512 of the 1577
+  mixed groups have only trivial extra kinds; without it a 7 m staircase earns a
+  pill on a 400 m boardwalk.
 - **There is no confidence label.** `Sicher`/`Wahrscheinlich`/`Unsicher` was
   removed: it graded the same tags `kindOf` reads and had become meaningless, with
   8006 of 8022 groups rated "Sicher" because `surface=wood` alone earned the top

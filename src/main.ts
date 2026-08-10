@@ -17,7 +17,7 @@ import {
 import { type Dataset, isCovered, loadDataset, SearchError } from "./dataset.js";
 import { formatDistance } from "./geo.js";
 import { BoardwalkMap } from "./map.js";
-import type { Group } from "./types.js";
+import type { Group, Kind } from "./types.js";
 
 /** Everything the UI needs to know. */
 const state = {
@@ -316,8 +316,13 @@ function resultCard(group: Group, index: number): HTMLLIElement {
 
   const meta = document.createElement("span");
   meta.className = "card-meta";
+  // One pill per kind the group is made of, longest first. The map draws every
+  // line in one colour, so this is the only place the mix is visible — worth the
+  // space for the 1065 groups that really are two or more things.
+  for (const { kind, share } of group.composition) {
+    meta.append(span(`pill ${kind}`, kindLabel(kind, share, group.composition.length)));
+  }
   meta.append(
-    span(`pill ${group.kind}`, KIND_LABELS[group.kind]),
     span("pill", `${group.ways.length} Abschnitt${group.ways.length === 1 ? "" : "e"}`),
   );
 
@@ -336,6 +341,18 @@ function resultCard(group: Group, index: number): HTMLLIElement {
 
   item.append(button, link);
   return item;
+}
+
+/**
+ * A kind pill's text.
+ *
+ * The share is only shown when there is something to compare it against. On a
+ * single-kind card "Bohlenweg 100%" is noise; on a mixed one "Bohlenweg 59% ·
+ * Holzbrücke 41%" is the whole point.
+ */
+function kindLabel(kind: Kind, share: number, kindCount: number): string {
+  if (kindCount === 1) return KIND_LABELS[kind];
+  return `${KIND_LABELS[kind]} ${Math.round(share * 100)}%`;
 }
 
 function span(className: string, text: string): HTMLSpanElement {

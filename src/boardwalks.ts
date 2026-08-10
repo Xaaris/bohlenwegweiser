@@ -24,6 +24,7 @@
  * what each one is, because the UI shows it.
  */
 
+import { MIN_KIND_SHARE } from "./config.js";
 import { boundsOf, boundsOverlap, lineLength } from "./geo.js";
 import type { Bounds, Group, Kind, RawWay, Tags, Way } from "./types.js";
 
@@ -109,7 +110,9 @@ export function groupsInBounds(groups: Group[], bounds: Bounds): Group[] {
 }
 
 function toGroup(ways: Way[]): Group {
-  const kind = dominantKind(ways);
+  const composition = compositionOf(ways);
+  // Safe: a group always has at least one way, so composition is never empty.
+  const kind = (composition[0] as { kind: Kind }).kind;
 
   return {
     // The builder's group id: stable across rebuilds and independent of input
@@ -119,34 +122,43 @@ function toGroup(ways: Way[]): Group {
     ways,
     lengthM: ways.reduce((sum, way) => sum + way.lengthM, 0),
     kind,
+    composition,
     bounds: boundsOf(ways.flatMap((way) => way.points)),
     tagSummary: summarizeTags(ways),
   };
 }
 
 /**
- * The kind that accounts for most of the group's length.
+ * What the group is made of, longest kind first.
  *
- * By length, not by number of ways: 1577 groups mix kinds, and a 200 m boardwalk
- * with a 5 m bridge in the middle is a boardwalk. Counting ways would let a
- * handful of short segments outvote the thing you actually walk on.
+ * Shares are by length, not by number of ways: 1577 groups mix kinds, and a 200 m
+ * boardwalk with a 5 m bridge in the middle is a boardwalk. Counting ways would
+ * let a handful of short segments outvote the thing you actually walk on.
+ *
+ * Kinds below MIN_KIND_SHARE are dropped, so the first entry is the group's kind
+ * and the rest are worth mentioning. The result always has at least one entry.
  */
-function dominantKind(ways: Way[]): Kind {
-  const total = new Map<Kind, number>();
+export function compositionOf(ways: Way[]): { kind: Kind; share: number }[] {
+  const byKind = new Map<Kind, number>();
+  let total = 0;
 
   for (const way of ways) {
-    total.set(way.kind, (total.get(way.kind) ?? 0) + way.lengthM);
+    byKind.set(way.kind, (byKind.get(way.kind) ?? 0) + way.lengthM);
+    total += way.lengthM;
   }
 
-  let best = (ways[0] as Way).kind;
-  let bestLength = -1;
-  for (const [kind, length] of total) {
-    if (length > bestLength) {
-      best = kind;
-      bestLength = length;
-    }
-  }
-  return best;
+  const ranked = [...byKind.entries()]
+    // A zero-length group would divide by zero. It cannot come from the builder,
+    // but treating it as a single kind is better than emitting NaN shares.
+    .map(([kind, length]) => ({ kind, share: total > 0 ? length / total : 1 }))
+    .sort((a, b) => b.share - a.share);
+
+  const worthShowing = ranked.filter((entry) => entry.share >= MIN_KIND_SHARE);
+
+  // Keep the dominant kind even if it somehow fell below the threshold, which a
+  // group of many equal-length kinds could manage: 1/5 is under a 10% floor only
+  // if there are more than ten kinds, but the guard costs nothing.
+  return worthShowing.length > 0 ? worthShowing : ranked.slice(0, 1);
 }
 
 /** The group's own name, or a description of what it is. */

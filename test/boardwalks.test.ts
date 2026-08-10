@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { groupsInBounds, groupWays, kindOf, parseWays } from "../src/boardwalks.js";
+import {
+  compositionOf,
+  groupsInBounds,
+  groupWays,
+  kindOf,
+  parseWays,
+} from "../src/boardwalks.js";
 import type { RawWay } from "../src/types.js";
 
 /**
@@ -341,6 +347,87 @@ describe("groupWays", () => {
 
     expect(groups).toHaveLength(7500);
     expect(Date.now() - started).toBeLessThan(3000);
+  });
+});
+
+describe("compositionOf", () => {
+  it("reports a single kind as the whole group", () => {
+    const ways = parseWays([
+      way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 100), 1),
+      way(2, { highway: "footway", bridge: "boardwalk" }, line(53.001, 8, 100), 1),
+    ]);
+
+    expect(compositionOf(ways)).toEqual([{ kind: "boardwalk", share: 1 }]);
+  });
+
+  it("orders kinds by share of length, longest first", () => {
+    const ways = parseWays([
+      way(1, { man_made: "pier" }, line(53, 8, 600), 1),
+      way(
+        2,
+        { highway: "footway", bridge: "yes", surface: "wood" },
+        line(53.01, 8, 300),
+        1,
+      ),
+      way(3, { highway: "footway", surface: "wood" }, line(53.02, 8, 100), 1),
+    ]);
+
+    const composition = compositionOf(ways);
+    expect(composition.map((c) => c.kind)).toEqual(["pier", "bridge", "path"]);
+    expect(composition[0]!.share).toBeCloseTo(0.6, 2);
+    expect(composition[1]!.share).toBeCloseTo(0.3, 2);
+    expect(composition[2]!.share).toBeCloseTo(0.1, 2);
+  });
+
+  it("drops kinds too small to be worth a word", () => {
+    // 7 m of steps onto a 400 m boardwalk is a connector, not a feature of the
+    // walk. 512 mixed groups are this case and show a single pill.
+    const ways = parseWays([
+      way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 400), 1),
+      way(2, { highway: "steps", surface: "wood" }, line(53.004, 8, 7), 1),
+    ]);
+
+    expect(compositionOf(ways)).toEqual([
+      { kind: "boardwalk", share: expect.any(Number) },
+    ]);
+    expect(compositionOf(ways)[0]!.share).toBeCloseTo(400 / 407, 2);
+  });
+
+  it("keeps a minority kind that is a real part of the walk", () => {
+    // Moorrundweg Pietzmoor is 59% boardwalk and 41% wooden bridge: both belong
+    // on the card, and the map cannot show the difference.
+    const ways = parseWays([
+      way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 590), 1),
+      way(
+        2,
+        { highway: "footway", bridge: "yes", surface: "wood" },
+        line(53.01, 8, 410),
+        1,
+      ),
+    ]);
+
+    const composition = compositionOf(ways);
+    expect(composition).toHaveLength(2);
+    expect(composition.map((c) => c.kind)).toEqual(["boardwalk", "bridge"]);
+  });
+
+  it("never returns an empty list, so the group always has a kind", () => {
+    const ways = parseWays([way(1, { man_made: "pier" }, line(53, 8, 50))]);
+    expect(compositionOf(ways)).toHaveLength(1);
+  });
+
+  it("is exposed on the group, with the dominant kind first", () => {
+    const groups = groupWays(
+      parseWays([
+        way(1, { man_made: "pier" }, line(53, 8, 700), 1),
+        way(2, { highway: "steps", surface: "wood" }, line(53.01, 8, 300), 1),
+      ]),
+    );
+
+    const group = groups[0]!;
+    expect(group.kind).toBe("pier");
+    expect(group.composition[0]!.kind).toBe("pier");
+    expect(group.composition.map((c) => c.kind)).toEqual(["pier", "steps"]);
   });
 });
 
