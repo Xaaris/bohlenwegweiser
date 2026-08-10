@@ -7,21 +7,14 @@
  *   3. sort            - longest first
  *   4. groupsInBounds  - pick the ones the viewport shows
  *
- * Grouping happens over the whole dataset, once, not per viewport: a group
- * assembled from only the ways on screen reported a different length after every
- * pan (way/18963200 measured 3219 m at full extent but 1590 m with half of it off
- * screen) and could split into two cards. Filtering runs on finished groups.
+ * Group over the whole dataset, then filter to the viewport — never the other way
+ * round. A group assembled from only the ways on screen changes length as the map
+ * moves: way/18963200 measures 3219 m at full extent but 1590 m with half of it
+ * off screen, and can split into two cards.
  *
- * *Which* ways belong together is decided in tools/build-dataset and shipped as
- * a field per way, so this file no longer repeats the union-find over vertex
- * distances. That copy had to be kept in step with group.go by hand, and cost
- * 29 ms on every page load; bucketing by the shipped id costs 12 ms, and both
- * were checked to produce the same 8357 groups.
- *
- * Deciding *whether* a way is a boardwalk also happens in the builder: the
- * dataset only contains ways that passed those filters. Repeating them here
- * dropped 0 of 15,256 ways, so the check was dead weight. What stays is saying
- * what each one is, because the UI shows it.
+ * tools/build-dataset decides both *whether* a way is a boardwalk and *which*
+ * ways belong together, so neither test lives here. This file measures, labels
+ * and buckets by the shipped group id.
  */
 
 import { MIN_KIND_SHARE } from "./config.js";
@@ -83,8 +76,8 @@ export function parseWays(ways: RawWay[]): Way[] {
 /**
  * Collects ways into groups by the builder's group id, longest first.
  *
- * Sorted by length alone, because that is what the cards show and it is the only
- * key that does not move as the map does.
+ * Sorted by length alone: it is what the cards show, and the only key that does
+ * not move as the map does.
  */
 export function groupWays(ways: Way[]): Group[] {
   const byGroup = new Map<number, Way[]>();
@@ -102,8 +95,7 @@ export function groupWays(ways: Way[]): Group[] {
  * Groups whose extent overlaps the given box.
  *
  * A box test on the finished group, so panning cannot change a group's length or
- * break it in two. Measured at 0.1 ms per pan, against 0.5 ms (a village) to
- * 1.4 ms (Hamburg) for the re-grouping this replaced.
+ * break it in two. 0.1 ms per pan over the whole country.
  */
 export function groupsInBounds(groups: Group[], bounds: Bounds): Group[] {
   return groups.filter((group) => boundsOverlap(group.bounds, bounds));
@@ -112,7 +104,7 @@ export function groupsInBounds(groups: Group[], bounds: Bounds): Group[] {
 function toGroup(ways: Way[]): Group {
   const composition = compositionOf(ways);
   // Safe: a group always has at least one way, so composition is never empty.
-  const kind = (composition[0] as { kind: Kind }).kind;
+  const kind = composition[0] as Kind;
 
   return {
     // The builder's group id: stable across rebuilds and independent of input
@@ -131,14 +123,14 @@ function toGroup(ways: Way[]): Group {
 /**
  * What the group is made of, longest kind first.
  *
- * Shares are by length, not by number of ways: 1577 groups mix kinds, and a 200 m
+ * Ranked by length, not by number of ways: 1577 groups mix kinds, and a 200 m
  * boardwalk with a 5 m bridge in the middle is a boardwalk. Counting ways would
  * let a handful of short segments outvote the thing you actually walk on.
  *
- * Kinds below MIN_KIND_SHARE are dropped, so the first entry is the group's kind
- * and the rest are worth mentioning. The result always has at least one entry.
+ * Kinds under MIN_KIND_SHARE of the total are left out, so the first entry is the
+ * group's kind and the rest are worth naming. Always at least one entry.
  */
-export function compositionOf(ways: Way[]): { kind: Kind; share: number }[] {
+export function compositionOf(ways: Way[]): Kind[] {
   const byKind = new Map<Kind, number>();
   let total = 0;
 
@@ -147,18 +139,16 @@ export function compositionOf(ways: Way[]): { kind: Kind; share: number }[] {
     total += way.lengthM;
   }
 
-  const ranked = [...byKind.entries()]
-    // A zero-length group would divide by zero. It cannot come from the builder,
-    // but treating it as a single kind is better than emitting NaN shares.
-    .map(([kind, length]) => ({ kind, share: total > 0 ? length / total : 1 }))
-    .sort((a, b) => b.share - a.share);
+  const ranked = [...byKind.entries()].sort((a, b) => b[1] - a[1]);
 
-  const worthShowing = ranked.filter((entry) => entry.share >= MIN_KIND_SHARE);
+  // A zero-length group cannot come from the builder, but guard the division
+  // rather than filtering every kind out on a NaN comparison.
+  const floor = total > 0 ? MIN_KIND_SHARE * total : 0;
+  const worthNaming = ranked.filter(([, length]) => length >= floor);
 
-  // Keep the dominant kind even if it somehow fell below the threshold, which a
-  // group of many equal-length kinds could manage: 1/5 is under a 10% floor only
-  // if there are more than ten kinds, but the guard costs nothing.
-  return worthShowing.length > 0 ? worthShowing : ranked.slice(0, 1);
+  return (worthNaming.length > 0 ? worthNaming : ranked.slice(0, 1)).map(
+    ([kind]) => kind,
+  );
 }
 
 /** The group's own name, or a description of what it is. */

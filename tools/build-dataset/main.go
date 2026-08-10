@@ -45,14 +45,13 @@ var bbox = [4]float64{47.2, 5.8, 55.1, 15.1} // minLat, minLon, maxLat, maxLon
 // Used for both halves of the job: building the Overpass query and deciding
 // which returned ways to keep. One list, so the two cannot drift apart.
 //
-// confidenceOf() in src/boardwalks.ts grades the same tags into the labels the
-// UI shows, so a new pair usually wants a case there too.
+// kindOf() in src/boardwalks.ts classifies the same tags into the labels the UI
+// shows, so a new pair usually wants a case there too.
 //
-// Three of these currently earn their keep only in principle: in Germany
-// `boardwalk=yes` and `footway=boardwalk` match zero ways and `surface=boardwalk`
-// matches 4. They stay because the region is a single variable (`bbox` below) and
-// those tags are used elsewhere — deleting them would quietly break the first
-// rebuild that widens the area.
+// Three of these earn their keep only in principle: in Germany `boardwalk=yes`
+// and `footway=boardwalk` match zero ways and `surface=boardwalk` matches 4. Keep
+// them anyway — the region is a single variable (`bbox` below) and those tags are
+// used elsewhere, so deleting them would quietly break the first wider rebuild.
 var boardwalkTags = []struct{ Key, Value string }{
 	{"surface", "wood"},
 	{"bridge", "boardwalk"},
@@ -122,10 +121,8 @@ var relevantHighways = []string{
 	"footway", "path", "cycleway", "bridleway", "pedestrian", "steps", "track",
 }
 
-// Tags the UI needs: enough for confidenceOf(), titleOf() and the tag pills on a
-// result card. Everything else is dropped.
-//
-// Grouping needs none of them any more, so this list is purely about display.
+// Tags the UI needs: enough for kindOf(), titleOf() and the tag pills on a result
+// card. Grouping reads none of them, so this list is purely about display.
 var keepTags = []string{
 	"highway", "man_made", "bridge", "surface", "boardwalk", "footway",
 }
@@ -375,9 +372,8 @@ type stats struct {
 // convert filters the Overpass elements down to plausible boardwalks and trims
 // each one to what the UI needs.
 //
-// This is the only place that decides whether a way counts as a boardwalk. The
-// browser used to repeat these checks, but the copy dropped 0 of 15,256 ways
-// while being a second thing to keep in sync, so it was removed.
+// This is the only place that decides whether a way counts as a boardwalk. Keep
+// it that way: the browser sees only what this ships.
 func convert(elements []overpassWay) ([]outWay, stats) {
 	var st stats
 	seen := make(map[int64]bool, len(elements))
@@ -460,12 +456,12 @@ func matchesName(name string) bool {
 
 // hasNonWoodSurface reports whether the surface value rules out wooden planks.
 //
-// Any mention of wood wins, so `wood;gravel` and `woodchips` are not rejected.
-// That is deliberately generous: woodchips are not planks, but a path named
-// Knüppeldamm laid with woodchips is a genuine soft-ground path rather than a
-// street address, which is what this check is for. Two such ways exist.
+// Any mention of wood wins, so `wood;gravel` and `woodchips` are kept. That is
+// deliberately generous: woodchips are not planks, but a path named Knüppeldamm
+// laid with woodchips is a genuine soft-ground path rather than a street address,
+// which is what this check is for.
 //
-// An absent surface tag is not contrary evidence, so those 11 ways stay.
+// An absent surface tag is not contrary evidence either, so those 11 ways stay.
 func hasNonWoodSurface(surface string) bool {
 	lower := strings.ToLower(strings.TrimSpace(surface))
 	if lower == "" || strings.Contains(lower, "wood") {

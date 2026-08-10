@@ -46,12 +46,12 @@ export const MIN_ZOOM_FOR_RESULTS = 9;
 export const MAX_LIST_ITEMS = 50;
 
 /**
- * Smallest share of a group's length a kind needs before the card mentions it.
+ * Smallest share of a group's length a kind needs before the card names it.
  *
  * A fifth of groups mix kinds, but usually trivially: the median minority stretch
  * is 10.7 m, and in 32% of mixed groups the minority is under 10% of the length.
- * A "Holztreppe" pill for 7 m of steps onto a 400 m boardwalk is noise. At 10%
- * the groups that keep a second pill are the ones where it means something —
- * Pietzmoor is 41% wooden bridge, Seebrücke Lubmin 23% pier.
+ * A "Holztreppe" pill for 7 m of steps onto a 400 m boardwalk is noise. At 10% the
+ * groups that keep a second pill are the ones where it means something — Pietzmoor
+ * is two fifths wooden bridge, Seebrücke Lubmin nearly a quarter pier.
  */
 export const MIN_KIND_SHARE = 0.1;

@@ -255,12 +255,12 @@ length, the Schwedenlöcher 97% stairs, Neue Seebrücke 69% pier.
 This also fixed `titleOf`, which called an unnamed wooden bridge
 "Holzweg (unbenannt)" — 2411 groups now read "Holzbrücke (unbenannt)" instead.
 
-A card lists **every** kind the group is made of, longest first, with a percentage
-once there is more than one: _Moorrundweg Pietzmoor_ reads "Bohlenweg 59% ·
-Holzbrücke 41%". Kinds under `MIN_KIND_SHARE` (10%) are left out, because a
-"Holztreppe" pill for 7 m of steps onto a 400 m boardwalk is noise — in 512 of the
-1577 mixed groups every extra kind is below that floor. The result: 87% of cards
-show one kind pill, 12.6% show two, and 58 groups show three or four.
+A card lists **every** kind the group is made of, longest first: _Moorrundweg
+Pietzmoor_ reads "Bohlenweg · Holzbrücke". Kinds under `MIN_KIND_SHARE` (10% of
+the group's length) are left out, because a "Holztreppe" pill for 7 m of steps onto
+a 400 m boardwalk is noise — in 512 of the 1577 mixed groups every extra kind is
+below that floor. The result: 87% of cards show one kind, 12.6% show two, and 58
+groups show three or four.
 
 The old _Sicher_ / _Wahrscheinlich_ / _Unsicher_ confidence label is gone. It was
 derived from the same tags and had stopped saying anything useful: 8006 of 8022

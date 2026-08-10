@@ -15,23 +15,21 @@ import type { Bounds, Group, Point } from "./types.js";
 
 /* One colour for every result, the logo's wood brown.
  *
- * Lines used to be coloured per kind, which was a mistake twice over: there was
- * no legend, so five colours meant nothing to the reader, and the distinction is
- * invisible at the zooms people use anyway. 80% of groups are a single kind, and
- * the median minority stretch inside a mixed group is 10.7 m — 1.9 px at zoom 14,
- * where "Mein Standort" lands. The kind belongs on the card and in the tooltip,
- * where there is room for a word.
+ * Colour is not available for encoding the kind: there is no legend on the map,
+ * and the difference would be invisible anyway — 80% of groups are a single kind,
+ * and the median minority stretch inside a mixed group is 10.7 m, which is 1.9 px
+ * at zoom 14. The kind goes on the card and in the tooltip instead.
  *
- * Solid, never dashed. Dashes read as "uncertain" or "proposed", which is wrong
- * for the most explicitly tagged features in the file, and a 6-6 dash on the
- * median 5 px way renders as a single dot.
+ * Solid, never dashed. Dashes read as "uncertain" or "proposed", wrong for the
+ * most explicitly tagged features in the file, and a 6-6 dash on the median 5 px
+ * way renders as a single dot.
  *
  * Kept in step with the palette in styles.css by hand, since CSS variables are
  * not readable from here. */
 const LINE_STYLE: L.PolylineOptions = { color: "#532d14", weight: 5, opacity: 0.9 };
 
-/* Rust, the one colour that is not in the wood family. With a single line colour
- * in play this contrast does more work than it did before. */
+/* Rust, the one colour outside the wood family, so a selection reads clearly
+ * against every other line. */
 const SELECTED_STYLE: L.PolylineOptions = { color: "#a44a3f", weight: 7, opacity: 0.96 };
 
 export type MapCallbacks = {
@@ -132,8 +130,8 @@ export class BoardwalkMap {
           LINE_STYLE,
         );
 
-        // The kind goes here rather than into the line colour: a tooltip has room
-        // for a word and needs no legend to decode.
+        // A tooltip has room for a word and needs no legend, which is why the
+        // kind is named here rather than encoded in the line colour.
         line.bindTooltip(
           `${group.title} · ${KIND_LABELS[group.kind]} · ${formatDistance(group.lengthM)}`,
           { sticky: true },

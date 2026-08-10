@@ -123,10 +123,9 @@ Length filtering runs on **groups, not individual ways** — the median OSM way 
   don't use dashes — they read as "uncertain" for the most explicitly tagged
   features in the file, and vanish on a 5 px line. The kind belongs on the card
   (`group.composition`) and in the tooltip.
-- **The card lists every kind above `MIN_KIND_SHARE`,** longest first, with a
-  percentage when there are two or more. The floor exists because 512 of the 1577
-  mixed groups have only trivial extra kinds; without it a 7 m staircase earns a
-  pill on a 400 m boardwalk.
+- **The card lists every kind above `MIN_KIND_SHARE`,** longest first. The floor
+  exists because 512 of the 1577 mixed groups have only trivial extra kinds;
+  without it a 7 m staircase earns a pill on a 400 m boardwalk.
 - **There is no confidence label.** `Sicher`/`Wahrscheinlich`/`Unsicher` was
   removed: it graded the same tags `kindOf` reads and had become meaningless, with
   8006 of 8022 groups rated "Sicher" because `surface=wood` alone earned the top

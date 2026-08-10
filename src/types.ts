@@ -39,9 +39,9 @@ export type RawWay = {
 /**
  * What kind of wooden structure this is.
  *
- * The app used to call all of it "Bohlenweg", which was wrong for most of the
- * data: 3237 of 8022 groups are wooden bridges (median 40 m) and 572 are wooden
- * stairs (median 41 m). Neither is a boardwalk.
+ * Most of the data is not a boardwalk: of 8022 groups, 3237 are wooden bridges
+ * (median 40 m) and 572 are wooden stairs (median 41 m), so calling everything a
+ * "Bohlenweg" would be wrong more often than right.
  */
 export type Kind = "boardwalk" | "pier" | "bridge" | "steps" | "path";
 
@@ -72,14 +72,14 @@ export type Group = {
   /** The kind that accounts for most of the group's length. */
   kind: Kind;
   /**
-   * Every kind the group is made of, longest first, as a share of its length.
+   * Every kind the group is made of, longest first.
    *
    * The card lists these, because a fifth of groups are more than one thing and
    * the map cannot show it: the median minority stretch is 10.7 m, under 2 px at
-   * zoom 14. Kinds too small to be worth a word are already filtered out, so
-   * this is usually one entry and never more than a handful.
+   * zoom 14. Kinds too small to be worth a word are filtered out, so this is
+   * usually one entry and never more than a handful. `kind` is the first of them.
    */
-  composition: { kind: Kind; share: number }[];
+  composition: Kind[];
   bounds: Bounds;
   /** Compact `key=value` list shown on the result card. */
   tagSummary: string[];

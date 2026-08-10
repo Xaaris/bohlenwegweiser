@@ -160,7 +160,7 @@ func TestMatchesName(t *testing.T) {
 
 		// Deliberately not matched. Bohlenstraße is a street by its own name: the
 		// suffix says road, not path, and nothing about planks. Treating it as
-		// evidence would re-add exactly the addresses nonWoodSurfaces removes.
+		// evidence would re-add exactly the addresses nonWoodSurfaces rejects.
 		{"Bohlenstraße", false, "a Straße is a street, whatever it is called"},
 		{"Holzweg", false, "a timber haul road, and the idiom for the wrong track"},
 		{"Moorweg", false, "a path through a moor need not be planked"},

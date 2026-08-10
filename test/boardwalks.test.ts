@@ -59,8 +59,8 @@ describe("kindOf", () => {
   });
 
   it("does not rely on surface=wood, which every kind has", () => {
-    // Measured: surface=wood covers 100% of bridges, 100% of steps, 97% of
-    // piers, so it cannot separate them.
+    // surface=wood covers 100% of bridges, 100% of steps and 97% of piers, so it
+    // cannot separate them.
     expect(kindOf({ surface: "wood", bridge: "yes" })).toBe("bridge");
     expect(kindOf({ surface: "wood", highway: "steps" })).toBe("steps");
     expect(kindOf({ surface: "wood" })).toBe("path");
@@ -135,9 +135,9 @@ describe("groupWays", () => {
   });
 
   it("keeps ways with different group ids apart, however close they are", () => {
-    // Touching but separately grouped: whatever the builder decided, the browser
-    // must not second-guess it. Only the builder knows why two neighbours are
-    // separate — most often that they are simply more than 20 m apart somewhere.
+    // Touching but separately grouped. The browser must not second-guess the
+    // builder: only it knows why two neighbours are separate, most often that
+    // they are more than 20 m apart somewhere along their length.
     const ways = parseWays([
       way(1, { highway: "footway", surface: "wood", name: "Moorsteg" }, [
         [53, 8],
@@ -153,10 +153,9 @@ describe("groupWays", () => {
   });
 
   it("merges touching ways with different names when the builder grouped them", () => {
-    // The inverse of an assertion this file used to make. Differing names no
-    // longer block a join: "Steg West" and "Steg Ost" are one jetty, and the old
-    // rule blocked 137 such pairs. The group takes the name of its first named
-    // way, so the title is one of the two.
+    // Differing names must not prevent a merge: "Steg West" and "Steg Ost" are one
+    // jetty. The group takes the name of its first named way, so the title is one
+    // of the two.
     const ways = parseWays([
       way(
         1,
@@ -239,8 +238,8 @@ describe("groupWays", () => {
   });
 
   it("does not call a wooden bridge or a staircase a Holzweg", () => {
-    // These used to be listed as "Holzweg (unbenannt)", which described neither.
-    // 3237 groups are bridges and 572 are stairs, so this was most of the list.
+    // 3237 groups are bridges and 572 are stairs, so a wrong fallback label here
+    // would be wrong for most of the list.
     const bridge = parseWays([
       way(1, { highway: "footway", bridge: "yes", surface: "wood" }, line(53, 8, 100)),
     ]);
@@ -330,8 +329,8 @@ describe("groupWays", () => {
   });
 
   it("stays fast with a lot of ways", () => {
-    // Bucketing by group id is a single pass, where the union-find over endpoint
-    // distances this replaced cost 29 ms for the real 15,713 ways.
+    // Bucketing by group id is a single pass. This guards against anyone making
+    // grouping quadratic again by comparing ways to each other.
     const ways = Array.from({ length: 15_000 }, (_, i) =>
       way(
         i + 1,
@@ -357,10 +356,10 @@ describe("compositionOf", () => {
       way(2, { highway: "footway", bridge: "boardwalk" }, line(53.001, 8, 100), 1),
     ]);
 
-    expect(compositionOf(ways)).toEqual([{ kind: "boardwalk", share: 1 }]);
+    expect(compositionOf(ways)).toEqual(["boardwalk"]);
   });
 
-  it("orders kinds by share of length, longest first", () => {
+  it("orders kinds by length, longest first", () => {
     const ways = parseWays([
       way(1, { man_made: "pier" }, line(53, 8, 600), 1),
       way(
@@ -372,30 +371,26 @@ describe("compositionOf", () => {
       way(3, { highway: "footway", surface: "wood" }, line(53.02, 8, 100), 1),
     ]);
 
-    const composition = compositionOf(ways);
-    expect(composition.map((c) => c.kind)).toEqual(["pier", "bridge", "path"]);
-    expect(composition[0]!.share).toBeCloseTo(0.6, 2);
-    expect(composition[1]!.share).toBeCloseTo(0.3, 2);
-    expect(composition[2]!.share).toBeCloseTo(0.1, 2);
+    // 600 m pier, 300 m bridge, 100 m path: longest first, whatever order the
+    // ways arrive in.
+    expect(compositionOf(ways)).toEqual(["pier", "bridge", "path"]);
   });
 
   it("drops kinds too small to be worth a word", () => {
     // 7 m of steps onto a 400 m boardwalk is a connector, not a feature of the
-    // walk. 512 mixed groups are this case and show a single pill.
+    // walk. 512 mixed groups are this case.
     const ways = parseWays([
       way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 400), 1),
       way(2, { highway: "steps", surface: "wood" }, line(53.004, 8, 7), 1),
     ]);
 
-    expect(compositionOf(ways)).toEqual([
-      { kind: "boardwalk", share: expect.any(Number) },
-    ]);
-    expect(compositionOf(ways)[0]!.share).toBeCloseTo(400 / 407, 2);
+    // 7 of 407 m is under the floor, so the staircase is not named.
+    expect(compositionOf(ways)).toEqual(["boardwalk"]);
   });
 
   it("keeps a minority kind that is a real part of the walk", () => {
-    // Moorrundweg Pietzmoor is 59% boardwalk and 41% wooden bridge: both belong
-    // on the card, and the map cannot show the difference.
+    // Moorrundweg Pietzmoor is 59% boardwalk and 41% wooden bridge: both belong on
+    // the card, since the map shows only one colour.
     const ways = parseWays([
       way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 590), 1),
       way(
@@ -406,9 +401,7 @@ describe("compositionOf", () => {
       ),
     ]);
 
-    const composition = compositionOf(ways);
-    expect(composition).toHaveLength(2);
-    expect(composition.map((c) => c.kind)).toEqual(["boardwalk", "bridge"]);
+    expect(compositionOf(ways)).toEqual(["boardwalk", "bridge"]);
   });
 
   it("never returns an empty list, so the group always has a kind", () => {
@@ -426,8 +419,7 @@ describe("compositionOf", () => {
 
     const group = groups[0]!;
     expect(group.kind).toBe("pier");
-    expect(group.composition[0]!.kind).toBe("pier");
-    expect(group.composition.map((c) => c.kind)).toEqual(["pier", "steps"]);
+    expect(group.composition).toEqual(["pier", "steps"]);
   });
 });
 
@@ -448,9 +440,9 @@ describe("groupsInBounds", () => {
   }
 
   it("keeps a partly visible group whole, at its full length", () => {
-    // The bug this replaced: grouping the ways in view rebuilt the group from a
-    // fragment, so way/18963200 reported 3219 m at full extent but 1590 m with
-    // half of it off screen, and sometimes split into two cards.
+    // Filtering must not rebuild the group from the fragment on screen, which is
+    // how way/18963200 came to report 3219 m at full extent and 1590 m with half
+    // of it off screen.
     const all = groupWays(parseWays(chain(53, 8)));
     expect(all).toHaveLength(1);
     const full = all[0]!;

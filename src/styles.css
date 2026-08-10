@@ -266,10 +266,10 @@ select {
   font-weight: 700;
 }
 
-/* One colour per kind. These are the *only* place kind is encoded as colour: map
- * lines are all one brown, because the difference is invisible at real zooms and
- * there is no legend out there. Here the colour sits next to its own label, so it
- * reads as a grouping cue rather than a code to decode.
+/* One colour per kind, and the only place kind is encoded as colour. It works
+ * here because the colour sits next to its own label, so it reads as a grouping
+ * cue rather than a code; on the map there is no legend, so lines are all one
+ * brown.
  *
  * Boardwalks and piers get the strong browns; bridges and stairs the cooler and
  * lighter tones, being short structures rather than a walk. */

@@ -1,20 +1,15 @@
-// Grouping: the builder needs it to drop paths that are too short to be
-// interesting, and it emits the result so the browser does not have to repeat it.
+// Grouping. This is the only implementation: each shipped way carries the id of
+// its group (`c` in the JSON, the smallest OSM way id in it), and
+// src/boardwalks.ts just buckets by that field.
 //
-// Each shipped way carries the id of its group (`c` in the JSON, the smallest OSM
-// way id in the group), so src/boardwalks.ts groups by that field instead of
-// re-running a union-find over 15,283 ways on every page load. That removes the
-// second copy of connectedComponents and samePath that used to live in the
-// browser and had to be kept in step by hand.
+// The group id must be derived from the data, never from iteration order. Go
+// randomises map iteration, so a sequential index would rewrite the whole of
+// public/boardwalks.json on every rebuild even when nothing changed.
 //
-// The group id is derived from the data, never from iteration order: Go
-// randomises map iteration, and a sequential index would rewrite the whole file
-// on every rebuild even when nothing changed.
-//
-// Filtering individual ways does not work: the median way is 10 m long and 81%
-// are under 25 m, because OSM splits paths into many short segments. Dropping
-// short ways would delete 725 boardwalks that are over 25 m once assembled,
-// losing 60.7 km of real path. The length test has to run on the group.
+// The length filter has to run on the assembled group, not on single ways: the
+// median way is 10 m and 81% are under 25 m, because OSM splits paths into many
+// short segments. Filtering per way would delete 725 boardwalks that clear 25 m
+// once assembled, losing 60.7 km of real path.
 
 package main
 
@@ -25,15 +20,12 @@ import "math"
 // `out tags geom` returns no node ids, so distance is all we have. 20 m already
 // accounts for 69% of all joins (median 5.41 m); widening it risks chaining
 // parallel boardwalks that merely run near each other.
-//
-// Only the builder joins ways now, so this number has no counterpart in the
-// browser any more.
 const joinDistanceM = 20.0
 
 const earthRadiusM = 6371008.8
 
 // groupAndFilter assigns each way its group id and returns the ways whose group
-// reaches minLengthM in total. It also reports how many groups survived.
+// reaches minLengthM in total, plus the number of groups that survived.
 func groupAndFilter(ways []outWay, minLengthM float64) ([]outWay, int) {
 	groups := connectedComponents(ways)
 
@@ -76,27 +68,24 @@ func groupAndFilter(ways []outWay, minLengthM float64) ([]outWay, int) {
 
 // connectedComponents groups indices of ways that meet.
 //
-// Proximity is the only test. There used to be a samePath() check that refused to
-// join two named ways whose names differed, on the theory that different names
-// mean different paths. Measured against the real data it was the only constraint
-// that ever fired (137 pairs blocked by names, 0 by its tag branches) and it was
-// mostly wrong: "Steg West"/"Steg Ost" are two fingers of one jetty,
+// Proximity is the only test, and deliberately so. Names look like a signal but
+// are not: requiring equal names blocks 137 pairs in the real data and is wrong
+// in nearly all of them — "Steg West"/"Steg Ost" are two fingers of one jetty,
 // "Strandübergang 17" leads onto the "Dünenpromenade", "Quellentalbrücke" and
 // "Zollhausbrücke" are consecutive spans of one crossing. Five of seven sampled
-// pairs share an OSM node outright, so they are physically connected; the other
-// two are within a few metres.
+// pairs share an OSM node outright.
 //
-// Every vertex counts as a possible junction, not just the two endpoints. OSM
-// frequently splits a way so that one *ends in the middle of another* — a side
-// branch off a boardwalk, a jetty off a walkway — and comparing endpoints alone
-// left those as separate networks. Direction is deliberately ignored: a branch
-// meeting a path at a right angle is still part of the same network.
+// `layer` is tempting too, for a bridge crossing *over* a boardwalk, and it is in
+// the raw response. Also unusable: 2472 pairs share an exact coordinate while
+// differing in layer, same-named ways included, because a ramp onto a bridge
+// legitimately changes layer. A shared node means you can walk from one to the
+// other, whatever the layer says.
 //
-// `layer` looks like it should stop a bridge crossing *over* a boardwalk from
-// joining it, and it is in the raw Overpass response. It is not usable: 2472 pairs
-// share an exact coordinate while differing in layer, including ways with the same
-// name, because a ramp onto a bridge legitimately changes layer. A shared node
-// means you can walk from one to the other, whatever the layer says.
+// Every vertex counts as a possible junction, not just the two endpoints: OSM
+// frequently splits a way so one *ends in the middle of another* — a side branch
+// off a boardwalk, a jetty off a walkway — and endpoints alone leave 303 real
+// networks split. Direction is ignored on purpose: a branch meeting a path at a
+// right angle is still the same network, so there is no angle test.
 //
 // Vertices are indexed in a grid whose cells are two join distances wide, so two
 // vertices within joinDistanceM always land in the same or an adjacent cell. That
@@ -110,8 +99,8 @@ func connectedComponents(ways []outWay) [][]int {
 	}
 
 	// Which way each indexed vertex belongs to, and where it is. Storing the point
-	// alongside the way index means the neighbour scan can compare the two
-	// vertices directly, rather than re-testing every vertex pair of both ways.
+	// alongside the index lets the neighbour scan compare two vertices directly,
+	// rather than re-testing every vertex pair of both ways.
 	type vertex struct {
 		way   int
 		point [2]float64

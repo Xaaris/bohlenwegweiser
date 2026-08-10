@@ -85,10 +85,9 @@ func TestGroupAndFilterDropsShortGroups(t *testing.T) {
 	}
 }
 
-// Names no longer affect grouping. This assertion is the inverse of what it was:
-// the builder used to refuse to join two named ways whose names differed, which
-// measured 137 blocked pairs, none of them convincing. "Steg West" and "Steg Ost"
-// are two fingers of one jetty, and five of seven sampled pairs share an OSM node.
+// Names must not affect grouping. Requiring equal names blocks 137 pairs in the
+// real data, none of them convincing: "Steg West" and "Steg Ost" are two fingers
+// of one jetty, and five of seven sampled pairs share an OSM node.
 func TestGroupAndFilterIgnoresNames(t *testing.T) {
 	// Two 15 m ways that touch and carry *different* names. Together they are a
 	// 30 m network, so both survive the 25 m minimum.
@@ -114,8 +113,7 @@ func TestGroupAndFilterIgnoresNames(t *testing.T) {
 	}
 }
 
-// Differing tags do not block a join either. The old samePath had branches for
-// bridge=boardwalk and surface=wood, but they rejected nothing in the real data.
+// Differing tags must not block a join either: proximity is the whole test.
 func TestGroupAndFilterIgnoresTagDifferences(t *testing.T) {
 	a := testWay(1, 53.0, 8.0, 15, map[string]string{"highway": "footway", "bridge": "boardwalk"})
 	b := testWay(2, 53.0+15/111_320, 8.0, 15, map[string]string{"highway": "path", "surface": "wood"})
@@ -204,7 +202,7 @@ func TestGroupAndFilterJoinsAtInteriorVertices(t *testing.T) {
 			want: 1,
 		},
 		{
-			// Meets the shared endpoint instead: the case that already worked.
+			// The simple case: they meet where both ways end.
 			name: "at an endpoint",
 			branch: testWayAt(4, boardwalk,
 				offset(lat, lon, 0, 100),
