@@ -2,7 +2,7 @@
  * Turns dataset ways into boardwalk groups.
  *
  * Steps:
- *   1. parseWays       - measure each way and label how sure we are
+ *   1. parseWays       - measure each way and classify what it is
  *   2. groupWays       - collect ways by the group id the builder assigned
  *   3. sort            - longest first
  *   4. groupsInBounds  - pick the ones the viewport shows
@@ -13,43 +13,51 @@
  * screen) and could split into two cards. Filtering runs on finished groups.
  *
  * *Which* ways belong together is decided in tools/build-dataset and shipped as
- * a field per way, so this file no longer repeats the union-find over endpoint
+ * a field per way, so this file no longer repeats the union-find over vertex
  * distances. That copy had to be kept in step with group.go by hand, and cost
  * 29 ms on every page load; bucketing by the shipped id costs 12 ms, and both
  * were checked to produce the same 8357 groups.
  *
  * Deciding *whether* a way is a boardwalk also happens in the builder: the
  * dataset only contains ways that passed those filters. Repeating them here
- * dropped 0 of 15,256 ways, so the check was dead weight. What stays is the
- * labelling, because the UI shows it.
+ * dropped 0 of 15,256 ways, so the check was dead weight. What stays is saying
+ * what each one is, because the UI shows it.
  */
 
 import { boundsOf, boundsOverlap, lineLength } from "./geo.js";
-import type { Bounds, Confidence, Group, RawWay, Tags, Way } from "./types.js";
+import type { Bounds, Group, Kind, RawWay, Tags, Way } from "./types.js";
 
 /**
- * How strongly the tags suggest a boardwalk.
+ * What kind of wooden structure a way is.
  *
- * OSM has no single canonical tag for a Bohlenweg, so this is a judgement call
- * shown to the user as "Sicher" / "Wahrscheinlich" / "Unsicher". Everything in
- * the dataset qualifies as at least "low", which is the name-only case.
+ * The dataset is not all boardwalks: 5070 of 15,728 ways are wooden bridges and
+ * 1861 are wooden stairs. `surface=wood` cannot tell them apart, because it is
+ * near-universal in every kind (100% of bridges, 100% of steps, 97% of piers).
+ * `highway` and `bridge` can, and both are already in the file.
+ *
+ * Order matters. `man_made=pier` wins over any bridge tag: 163 ways carry both,
+ * and a jetty that happens to be built as a bridge is still a jetty — "Steg" is
+ * the more useful word for it. Otherwise an explicit `bridge=boardwalk` beats
+ * the geometry-led guesses below it.
  */
-export function confidenceOf(tags: Tags): Confidence {
-  if (tags.bridge === "boardwalk" || tags.surface === "wood") return "high";
-  if (tags.boardwalk === "yes" || tags.footway === "boardwalk") return "medium";
-  if (tags.surface === "boardwalk") return "medium";
-  return "low";
+export function kindOf(tags: Tags): Kind {
+  if (tags.man_made === "pier") return "pier";
+  if (tags.bridge === "boardwalk") return "boardwalk";
+  if (tags.highway === "steps") return "steps";
+  if (tags.bridge) return "bridge";
+  return "path";
 }
 
-export const CONFIDENCE_LABELS: Record<Confidence, string> = {
-  high: "Sicher",
-  medium: "Wahrscheinlich",
-  low: "Unsicher",
+/** German labels for the kinds, shown on the result card. */
+export const KIND_LABELS: Record<Kind, string> = {
+  boardwalk: "Bohlenweg",
+  pier: "Steg",
+  bridge: "Holzbrücke",
+  steps: "Holztreppe",
+  path: "Holzweg",
 };
 
-const CONFIDENCE_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 };
-
-/** Measures the given ways and labels each one. */
+/** Measures the given ways and classifies each one. */
 export function parseWays(ways: RawWay[]): Way[] {
   const result: Way[] = [];
 
@@ -64,7 +72,7 @@ export function parseWays(ways: RawWay[]): Way[] {
       tags: way.tags,
       points: way.points,
       lengthM: lineLength(way.points),
-      confidence: confidenceOf(way.tags),
+      kind: kindOf(way.tags),
     });
   }
 
@@ -74,8 +82,8 @@ export function parseWays(ways: RawWay[]): Way[] {
 /**
  * Collects ways into groups by the builder's group id, longest first.
  *
- * Sorted by length alone, because that is what the cards show. Confidence is a
- * label of its own, and mixing it into the order only makes the list look wrong.
+ * Sorted by length alone, because that is what the cards show and it is the only
+ * key that does not move as the map does.
  */
 export function groupWays(ways: Way[]): Group[] {
   const byGroup = new Map<number, Way[]>();
@@ -101,31 +109,54 @@ export function groupsInBounds(groups: Group[], bounds: Bounds): Group[] {
 }
 
 function toGroup(ways: Way[]): Group {
-  const best = ways.reduce((acc, way) =>
-    CONFIDENCE_RANK[way.confidence] > CONFIDENCE_RANK[acc.confidence] ? way : acc,
-  );
+  const kind = dominantKind(ways);
 
   return {
     // The builder's group id: stable across rebuilds and independent of input
     // order, so a selection survives re-rendering.
     id: String((ways[0] as Way).groupId),
-    title: titleOf(ways),
+    title: titleOf(ways, kind),
     ways,
     lengthM: ways.reduce((sum, way) => sum + way.lengthM, 0),
-    confidence: best.confidence,
+    kind,
     bounds: boundsOf(ways.flatMap((way) => way.points)),
     tagSummary: summarizeTags(ways),
   };
 }
 
-function titleOf(ways: Way[]): string {
+/**
+ * The kind that accounts for most of the group's length.
+ *
+ * By length, not by number of ways: 1577 groups mix kinds, and a 200 m boardwalk
+ * with a 5 m bridge in the middle is a boardwalk. Counting ways would let a
+ * handful of short segments outvote the thing you actually walk on.
+ */
+function dominantKind(ways: Way[]): Kind {
+  const total = new Map<Kind, number>();
+
+  for (const way of ways) {
+    total.set(way.kind, (total.get(way.kind) ?? 0) + way.lengthM);
+  }
+
+  let best = (ways[0] as Way).kind;
+  let bestLength = -1;
+  for (const [kind, length] of total) {
+    if (length > bestLength) {
+      best = kind;
+      bestLength = length;
+    }
+  }
+  return best;
+}
+
+/** The group's own name, or a description of what it is. */
+function titleOf(ways: Way[], kind: Kind): string {
   const name = ways.find((way) => way.tags.name)?.tags.name;
   if (name) return name.trim();
 
-  if (ways.some((w) => w.tags.bridge === "boardwalk")) return "Bohlenweg (unbenannt)";
-  if (ways.some((w) => w.tags.man_made === "pier")) return "Steg (unbenannt)";
-  if (ways.some((w) => w.tags.surface === "wood")) return "Holzweg (unbenannt)";
-  return "Möglicher Bohlenweg";
+  // Named after what it is rather than always "Bohlenweg": a wooden bridge used
+  // to be listed as "Holzweg (unbenannt)", which described neither.
+  return `${KIND_LABELS[kind]} (unbenannt)`;
 }
 
 const SUMMARY_KEYS = ["highway", "man_made", "bridge", "surface", "boardwalk", "footway"];

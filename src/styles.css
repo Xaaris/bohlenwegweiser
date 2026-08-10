@@ -1,7 +1,9 @@
 /* Palette taken from the logo, whose dominant colour is the wood brown #532d14.
  *
  * Contrast measured against WCAG AA: heading 13.1:1, status text 5.6:1, card
- * titles 17.5:1, every badge above 4.5:1. */
+ * titles 17.5:1, every badge above 4.5:1. The kind pills carry white text and
+ * measure 11.98:1 (Bohlenweg), 8.48:1 (Holzweg), 5.91:1 (Holztreppe), 5.65:1
+ * (Holzbrücke) and 4.98:1 (Steg). */
 
 :root {
   --ink: #201810;
@@ -264,17 +266,31 @@ select {
   font-weight: 700;
 }
 
-.pill.high {
+/* One colour per kind, matching LINE_STYLES in map.ts by hand: the map and the
+ * card have to agree, and CSS variables are not readable from JS. Boardwalks and
+ * piers get the strong browns; bridges and stairs are the cooler and lighter
+ * tones, because they are short structures rather than a walk. */
+.pill.boardwalk {
   color: #fff;
   background: var(--bark);
 }
 
-.pill.medium {
+.pill.pier {
+  color: #fff;
+  background: #8a6a3f;
+}
+
+.pill.path {
+  color: #fff;
+  background: var(--link);
+}
+
+.pill.bridge {
   color: #fff;
   background: var(--teal);
 }
 
-.pill.low {
+.pill.steps {
   color: #fff;
   background: var(--amber);
 }

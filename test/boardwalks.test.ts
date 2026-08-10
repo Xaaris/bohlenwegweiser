@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { confidenceOf, groupsInBounds, groupWays, parseWays } from "../src/boardwalks.js";
+import { groupsInBounds, groupWays, kindOf, parseWays } from "../src/boardwalks.js";
 import type { RawWay } from "../src/types.js";
 
 /**
@@ -31,23 +31,33 @@ function line(lat: number, lon: number, meters: number): [number, number][] {
   ];
 }
 
-describe("confidenceOf", () => {
-  it("rates an explicit boardwalk bridge highest", () => {
-    expect(confidenceOf({ bridge: "boardwalk" })).toBe("high");
-    expect(confidenceOf({ surface: "wood" })).toBe("high");
+describe("kindOf", () => {
+  it("names the structure from the tags", () => {
+    expect(kindOf({ bridge: "boardwalk" })).toBe("boardwalk");
+    expect(kindOf({ man_made: "pier" })).toBe("pier");
+    expect(kindOf({ highway: "steps", surface: "wood" })).toBe("steps");
+    expect(kindOf({ bridge: "yes", surface: "wood" })).toBe("bridge");
+    expect(kindOf({ highway: "footway", surface: "wood" })).toBe("path");
   });
 
-  it("rates boardwalk hints in the middle", () => {
-    expect(confidenceOf({ boardwalk: "yes" })).toBe("medium");
-    expect(confidenceOf({ footway: "boardwalk" })).toBe("medium");
-    expect(confidenceOf({ surface: "boardwalk" })).toBe("medium");
+  it("lets a pier win over any bridge tag", () => {
+    // 163 ways carry both. A jetty built as a bridge is still a jetty, and
+    // "Steg" is the more useful word for it.
+    expect(kindOf({ man_made: "pier", bridge: "yes" })).toBe("pier");
+    expect(kindOf({ man_made: "pier", bridge: "boardwalk" })).toBe("pier");
+    expect(kindOf({ man_made: "pier", highway: "steps" })).toBe("pier");
   });
 
-  it("falls back to low, the name-only case", () => {
-    // The builder only ships ways with some boardwalk evidence, so anything
-    // without a telling tag got in on its name.
-    expect(confidenceOf({ name: "Bohlenweg" })).toBe("low");
-    expect(confidenceOf({ highway: "footway" })).toBe("low");
+  it("prefers an explicit boardwalk over the generic bridge and steps cases", () => {
+    expect(kindOf({ bridge: "boardwalk", highway: "steps" })).toBe("boardwalk");
+  });
+
+  it("does not rely on surface=wood, which every kind has", () => {
+    // Measured: surface=wood covers 100% of bridges, 100% of steps, 97% of
+    // piers, so it cannot separate them.
+    expect(kindOf({ surface: "wood", bridge: "yes" })).toBe("bridge");
+    expect(kindOf({ surface: "wood", highway: "steps" })).toBe("steps");
+    expect(kindOf({ surface: "wood" })).toBe("path");
   });
 });
 
@@ -60,7 +70,7 @@ describe("parseWays", () => {
     expect(ways).toHaveLength(1);
     expect(ways[0]!.lengthM).toBeGreaterThan(190);
     expect(ways[0]!.lengthM).toBeLessThan(210);
-    expect(ways[0]!.confidence).toBe("high");
+    expect(ways[0]!.kind).toBe("boardwalk");
   });
 
   it("drops ways with too few points to be a line", () => {
@@ -178,21 +188,21 @@ describe("groupWays", () => {
     expect(groups[0]!.lengthM).toBeGreaterThan(groups[1]!.lengthM);
   });
 
-  it("sorts by length alone, ignoring confidence", () => {
-    // The card shows the length, so mixing confidence into the order would put a
-    // shorter way above a longer one and look like a bug.
+  it("sorts by length alone, ignoring kind", () => {
+    // The card shows the length, so ranking kinds would put a shorter way above
+    // a longer one and look like a bug.
     const ways = parseWays([
-      // Name only, so low confidence, but the longest.
-      way(1, { highway: "footway", name: "Bohlenweg" }, line(53, 8, 500)),
+      // A plain wooden path, but the longest.
+      way(1, { highway: "footway", surface: "wood" }, line(53, 8, 500)),
       way(2, { highway: "footway", bridge: "boardwalk" }, line(53.3, 8.3, 300)),
-      way(3, { highway: "footway", surface: "wood" }, line(53.6, 8.6, 100)),
+      way(3, { man_made: "pier", surface: "wood" }, line(53.6, 8.6, 100)),
     ]);
 
     const groups = groupWays(ways);
     const lengths = groups.map((g) => Math.round(g.lengthM));
 
     expect(lengths).toEqual([...lengths].sort((a, b) => b - a));
-    expect(groups[0]!.confidence).toBe("low");
+    expect(groups[0]!.kind).toBe("path");
   });
 
   it("gives the same id regardless of input order", () => {
@@ -210,7 +220,7 @@ describe("groupWays", () => {
     expect(idOf([a, b])).toBe("1");
   });
 
-  it("names a group after its way, or falls back to a label", () => {
+  it("names a group after its way, or after what it is", () => {
     const named = parseWays([
       way(1, { highway: "footway", surface: "wood", name: "Moorsteg" }, line(53, 8, 100)),
     ]);
@@ -220,6 +230,57 @@ describe("groupWays", () => {
       way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 100)),
     ]);
     expect(groupWays(unnamed)[0]!.title).toBe("Bohlenweg (unbenannt)");
+  });
+
+  it("does not call a wooden bridge or a staircase a Holzweg", () => {
+    // These used to be listed as "Holzweg (unbenannt)", which described neither.
+    // 3237 groups are bridges and 572 are stairs, so this was most of the list.
+    const bridge = parseWays([
+      way(1, { highway: "footway", bridge: "yes", surface: "wood" }, line(53, 8, 100)),
+    ]);
+    expect(groupWays(bridge)[0]!.title).toBe("Holzbrücke (unbenannt)");
+    expect(groupWays(bridge)[0]!.kind).toBe("bridge");
+
+    const steps = parseWays([
+      way(1, { highway: "steps", surface: "wood" }, line(53, 8, 40)),
+    ]);
+    expect(groupWays(steps)[0]!.title).toBe("Holztreppe (unbenannt)");
+
+    const pier = parseWays([way(1, { man_made: "pier" }, line(53, 8, 80))]);
+    expect(groupWays(pier)[0]!.title).toBe("Steg (unbenannt)");
+  });
+
+  it("gives a mixed group the kind that covers most of its length", () => {
+    // 1577 groups mix kinds. A 400 m boardwalk with a 20 m bridge in the middle
+    // is a boardwalk; counting ways instead of metres would let short segments
+    // outvote the thing you actually walk on.
+    const ways = parseWays([
+      way(1, { highway: "footway", bridge: "boardwalk" }, line(53, 8, 400), 1),
+      way(
+        2,
+        { highway: "footway", bridge: "yes", surface: "wood" },
+        line(53.004, 8, 20),
+        1,
+      ),
+      way(3, { highway: "steps", surface: "wood" }, line(53.0042, 8, 15), 1),
+    ]);
+
+    const groups = groupWays(ways);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.kind).toBe("boardwalk");
+    expect(groups[0]!.ways).toHaveLength(3);
+  });
+
+  it("does not let a long staircase be outvoted by two short boardwalks", () => {
+    // The rule is length, not a ranking of kinds: a group that is mostly stairs
+    // should say so.
+    const ways = parseWays([
+      way(1, { highway: "steps", surface: "wood" }, line(53, 8, 300), 1),
+      way(2, { highway: "footway", bridge: "boardwalk" }, line(53.003, 8, 30), 1),
+      way(3, { highway: "footway", bridge: "boardwalk" }, line(53.0033, 8, 30), 1),
+    ]);
+
+    expect(groupWays(ways)[0]!.kind).toBe("steps");
   });
 
   it("assembles a branching network into one group", () => {

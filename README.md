@@ -173,12 +173,11 @@ rendering 837 cards measured 79 ms of layout for a list nobody scrolls through.
 ### Finding boardwalks
 
 OSM has no single tag for a Bohlenweg, so the dataset builder keeps a way if any
-of these apply, and `confidenceOf` in the browser grades the evidence into
-_Sicher_, _Wahrscheinlich_ or _Unsicher_:
+of these apply:
 
-- `bridge=boardwalk` or `surface=wood` → high
-- `boardwalk=yes`, `footway=boardwalk`, `surface=boardwalk` → medium
-- only a matching name such as _Bohlenweg_ → low
+- `bridge=boardwalk` or `surface=wood`
+- `boardwalk=yes`, `footway=boardwalk`, `surface=boardwalk`
+- only a matching name such as _Bohlenweg_
 
 Three of those tags match almost nothing in Germany — `boardwalk=yes` and
 `footway=boardwalk` match zero ways, `surface=boardwalk` matches 4. They stay
@@ -213,6 +212,53 @@ real file they dropped 0 of 15,256 ways — a second copy to keep in sync for no
 effect. It now only labels what the builder shipped. Across the whole dataset
 that is 15,665 high, 4 medium and 8 low — the 8 being the name-only ways with no
 surface tag.
+
+### Not everything is a Bohlenweg
+
+The app used to label every result "Bohlenweg". Counting the shipped groups, most
+of them are not one:
+
+| kind | label | groups | median length |
+| ---- | ----- | ------ | ------------- |
+| wooden bridge | _Holzbrücke_ | 3237 | 40 m |
+| wooden path | _Holzweg_ | 2328 | 83 m |
+| pier or jetty | _Steg_ | 1008 | 63 m |
+| boardwalk | _Bohlenweg_ | 877 | 81 m |
+| wooden stairs | _Holztreppe_ | 572 | 41 m |
+
+A 40 m wooden bridge over a stream is not a boardwalk, and neither is a flight of
+steps. Each group now carries a `kind`, shown as the first pill on its card and as
+the line colour on the map. Nothing is excluded — a 443 m wooden staircase is
+worth seeing, it just should not claim to be a Bohlenweg.
+
+`surface=wood` cannot make this distinction: it covers 100% of the bridges, 100%
+of the stairs and 97% of the piers. `highway` and `bridge` can, and both were
+already in the file, so no new data was needed:
+
+```
+man_made=pier              -> Steg          (wins over any bridge tag)
+bridge=boardwalk           -> Bohlenweg
+highway=steps              -> Holztreppe
+bridge=<anything else>      -> Holzbrücke
+otherwise                  -> Holzweg
+```
+
+163 ways carry both `man_made=pier` and `bridge=*`. The pier wins: a jetty built
+as a bridge is still a jetty, and _Steg_ is the more useful word for it.
+
+A group's kind is the one covering most of its **length**, not the most ways.
+1577 groups mix kinds, and a 400 m boardwalk with a 20 m bridge in the middle is a
+boardwalk; counting ways would let a handful of short segments outvote the thing
+you actually walk on. Checked against OSM: Seebrücke Lubmin is 74% boardwalk by
+length, the Schwedenlöcher 97% stairs, Neue Seebrücke 69% pier.
+
+This also fixed `titleOf`, which called an unnamed wooden bridge
+"Holzweg (unbenannt)" — 2411 groups now read "Holzbrücke (unbenannt)" instead.
+
+The old _Sicher_ / _Wahrscheinlich_ / _Unsicher_ confidence label is gone. It was
+derived from the same tags and had stopped saying anything useful: 8006 of 8022
+groups were "Sicher", because `surface=wood` alone earned the top grade. Naming
+the structure is the honest version of what it was trying to convey.
 
 ### Which names count
 

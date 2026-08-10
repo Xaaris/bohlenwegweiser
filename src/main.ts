@@ -7,7 +7,7 @@
 
 import "./styles.css";
 
-import { CONFIDENCE_LABELS, groupsInBounds, groupWays, parseWays } from "./boardwalks.js";
+import { groupsInBounds, groupWays, KIND_LABELS, parseWays } from "./boardwalks.js";
 import {
   DEFAULT_MIN_LENGTH_M,
   MAX_LIST_ITEMS,
@@ -317,7 +317,7 @@ function resultCard(group: Group, index: number): HTMLLIElement {
   const meta = document.createElement("span");
   meta.className = "card-meta";
   meta.append(
-    span(`pill ${group.confidence}`, CONFIDENCE_LABELS[group.confidence]),
+    span(`pill ${group.kind}`, KIND_LABELS[group.kind]),
     span("pill", `${group.ways.length} Abschnitt${group.ways.length === 1 ? "" : "e"}`),
   );
 

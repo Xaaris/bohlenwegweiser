@@ -37,7 +37,7 @@ What is left to keep in step:
 | Browser | Go builder |
 | --- | --- |
 | `MIN_LENGTH_M` = 25 (`src/config.ts`) | `minLengthM` (`main.go`) |
-| `confidenceOf` (`src/boardwalks.ts`) | `boardwalkTags` (`main.go`) |
+| `kindOf` (`src/boardwalks.ts`) | `boardwalkTags`, `keepTags` (`main.go`) |
 
 **Deciding what counts as a boardwalk lives only in the builder** (`isRelevant`,
 `looksLikeBoardwalk`, `boardwalkTags`, `nameFragments`, `relevantHighways`,
@@ -46,9 +46,10 @@ their name alone — "Bohlenweg" is a common street name, and 37 asphalt or
 compacted tracks were being shipped as boardwalks. Never let it override an
 explicit `bridge=boardwalk`, and note that any value mentioning wood is kept. The
 browser used to repeat those checks defensively; measured against the real file
-the copy dropped 0 of 15,256 ways, so it was removed. `confidenceOf`
-(`src/boardwalks.ts`) only *grades* the tags into the labels the UI shows — add a
-tag to `boardwalkTags` and it usually wants a case there too.
+the copy dropped 0 of 15,256 ways, so it was removed. `kindOf`
+(`src/boardwalks.ts`) only *classifies* what the builder shipped — add a tag to
+`boardwalkTags` and it usually wants a case there too, and anything `kindOf` reads
+has to be in `keepTags`.
 
 Joining lives only in the builder too (`joinDistanceM`, `connectedComponents` in
 `group.go`). Changing either needs `npm run data` to take effect — the browser
@@ -72,7 +73,8 @@ Two more copies that are *not* Go-related and get missed:
 
 - Line colours in `LINE_STYLES` (`src/map.ts`) are hard-coded hex because CSS
   variables aren't readable from JS. Keep them in step with the palette in
-  `src/styles.css`.
+  `src/styles.css`, and with the `.pill.<kind>` rules — the map line and the card
+  pill for one kind are meant to be the same colour.
 - `boardwalkNames` (exact, builds the query) and `nameFragments` (substring,
   filters the response) in `main.go` are two halves of one rule: a new word needs
   to be in **both** or it is either never fetched or fetched and discarded.
@@ -110,6 +112,15 @@ Length filtering runs on **groups, not individual ways** — the median OSM way 
   OSM names are untrusted input.
 - The list is capped at `MAX_LIST_ITEMS` with a "… und N weitere" note; the map
   still draws everything.
+- **A result is labelled by `kind`, not called "Bohlenweg" regardless.** Only 877
+  of 8022 groups are boardwalks; 3237 are wooden bridges and 572 are stairs. The
+  kind is the one covering most of the group's *length* (1577 groups mix kinds),
+  `man_made=pier` beats any bridge tag, and nothing is excluded — that was a
+  deliberate product call, so don't start dropping kinds in the builder.
+- **There is no confidence label.** `Sicher`/`Wahrscheinlich`/`Unsicher` was
+  removed: it graded the same tags `kindOf` reads and had become meaningless, with
+  8006 of 8022 groups rated "Sicher" because `surface=wood` alone earned the top
+  grade. Don't reintroduce it as a second opinion on the same data.
 - **All empty-state wording comes from `emptyReason()`** (`main.ts`), used by both
   the list and the status line. They said different things when the wording was
   duplicated. Outside the dataset's bbox it says so rather than "none here",
@@ -129,8 +140,8 @@ Length filtering runs on **groups, not individual ways** — the median OSM way 
 - Biome formats: 2 spaces, 90-column lines. Run `npm run fix`.
 - Comments explain *why* (trade-offs, measurements), not what. Match that tone;
   README sections mirror these rationales — update both when behaviour changes.
-- User-facing strings are German (`"Sicher"`, `"Wahrscheinlich"`, `"Unsicher"`,
-  `SearchError` messages); code and comments are English.
+- User-facing strings are German (`KIND_LABELS`, `SearchError` messages); code and
+  comments are English.
 - `src/geo.ts` and `src/boardwalks.ts` are pure functions — keep DOM and network
   out of them so `test/*.test.ts` stays trivial.
 

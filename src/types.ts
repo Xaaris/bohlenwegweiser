@@ -36,8 +36,14 @@ export type RawWay = {
   points: Point[];
 };
 
-/** How strongly the tags suggest this really is a boardwalk. */
-export type Confidence = "high" | "medium" | "low";
+/**
+ * What kind of wooden structure this is.
+ *
+ * The app used to call all of it "Bohlenweg", which was wrong for most of the
+ * data: 3237 of 8022 groups are wooden bridges (median 40 m) and 572 are wooden
+ * stairs (median 41 m). Neither is a boardwalk.
+ */
+export type Kind = "boardwalk" | "pier" | "bridge" | "steps" | "path";
 
 /** A single OSM way that looks like a boardwalk. */
 export type Way = {
@@ -47,7 +53,7 @@ export type Way = {
   points: Point[];
   /** Length of the way in metres. */
   lengthM: number;
-  confidence: Confidence;
+  kind: Kind;
 };
 
 /**
@@ -63,7 +69,8 @@ export type Group = {
   ways: Way[];
   /** Combined length of all member ways in metres. */
   lengthM: number;
-  confidence: Confidence;
+  /** The kind that accounts for most of the group's length. */
+  kind: Kind;
   bounds: Bounds;
   /** Compact `key=value` list shown on the result card. */
   tagSummary: string[];

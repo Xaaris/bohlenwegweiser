@@ -10,15 +10,21 @@ import "leaflet/dist/leaflet.css";
 
 import { DEFAULT_CENTER, DEFAULT_ZOOM, TILE_ATTRIBUTION, TILE_URL } from "./config.js";
 import { formatDistance } from "./geo.js";
-import type { Bounds, Confidence, Group, Point } from "./types.js";
+import type { Bounds, Group, Kind, Point } from "./types.js";
 
-/* Line colours follow the logo's wood brown, with distinguishable tones for the
- * lower confidence levels. Kept in step with the palette in styles.css by hand,
- * since CSS variables are not readable from here. */
-const LINE_STYLES: Record<Confidence, L.PolylineOptions> = {
-  high: { color: "#532d14", weight: 5, opacity: 0.9 },
-  medium: { color: "#8a6a3f", weight: 5, opacity: 0.88 },
-  low: { color: "#b7791f", weight: 5, opacity: 0.84, dashArray: "6 6" },
+/* Line colours follow the logo's wood brown, with distinguishable tones per kind.
+ * Kept in step with the palette in styles.css by hand, since CSS variables are not
+ * readable from here.
+ *
+ * Boardwalks and piers — the things people come here for — get the two strongest
+ * browns. Bridges and stairs are dashed, because they are short structures rather
+ * than something you walk along, and 3809 of 8022 groups are one or the other. */
+const LINE_STYLES: Record<Kind, L.PolylineOptions> = {
+  boardwalk: { color: "#532d14", weight: 5, opacity: 0.9 },
+  pier: { color: "#8a6a3f", weight: 5, opacity: 0.88 },
+  path: { color: "#6b4423", weight: 5, opacity: 0.88 },
+  bridge: { color: "#197278", weight: 4, opacity: 0.85, dashArray: "6 6" },
+  steps: { color: "#8a5a10", weight: 4, opacity: 0.85, dashArray: "3 5" },
 };
 
 const SELECTED_STYLE: L.PolylineOptions = { color: "#a44a3f", weight: 7, opacity: 0.96 };
@@ -118,7 +124,7 @@ export class BoardwalkMap {
       const layers = group.ways.map((way) => {
         const line = L.polyline(
           way.points.map((p) => [p.lat, p.lon] as [number, number]),
-          LINE_STYLES[group.confidence],
+          LINE_STYLES[group.kind],
         );
 
         line.bindTooltip(`${group.title} · ${formatDistance(group.lengthM)}`, {
@@ -147,7 +153,7 @@ export class BoardwalkMap {
   /** Highlights one group, optionally zooming to it. */
   select(groupId: string | null, zoomTo = false): void {
     for (const [id, { group, layers }] of this.lines) {
-      const style = id === groupId ? SELECTED_STYLE : LINE_STYLES[group.confidence];
+      const style = id === groupId ? SELECTED_STYLE : LINE_STYLES[group.kind];
       for (const layer of layers) {
         layer.setStyle(style);
         if (id === groupId) layer.bringToFront();
