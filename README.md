@@ -67,6 +67,14 @@ The 5% floor is well clear of real movement. Rebuilt two weeks after the
 committed file, the dataset went from 15,728 ways to 15,797 — a change of
 +0.43%. OSM gains boardwalks far faster than it loses them.
 
+Each run reports what actually changed, as a job summary and in the commit
+message body: how many ways were added, how many removed, and the resulting way
+and group counts. The counts are diffed as **sets of way ids**, not as totals,
+because a total hides the churn — that same +69 was 89 ways added and 20
+removed, 109 real changes. It goes in the commit message because the diff itself
+is one unreadable line of JSON, so `git log` is the only place the change stays
+legible once the run's logs expire.
+
 GitHub disables a scheduled workflow after 60 days without repository activity.
 If the data stops refreshing, look there first.
 

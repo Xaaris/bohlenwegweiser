@@ -35,9 +35,12 @@ jobs:
           # The version the builder is developed against, kept in one place.
           go-version-file: go.mod
 
-      - name: Count the ways currently shipped
-        id: before
-        run: echo "ways=$(jq '.ways | length' public/boardwalks.json)" >> "$GITHUB_OUTPUT"
+      # The way ids that are shipped right now, to diff against after the
+      # rebuild. A bare count would hide churn: measured over two weeks the file
+      # went from 15,728 ways to 15,797, and that quiet +69 was 89 boardwalks
+      # added and 20 removed — 109 real changes.
+      - name: Record what is shipped now
+        run: jq -r '.ways[].i' public/boardwalks.json | LC_ALL=C sort > "$RUNNER_TEMP/before-ids"
 
       # Overpass is queried once for the whole of Germany; this takes a minute
       # or two. The builder fails by itself on a remark, an empty response or an
@@ -49,24 +52,66 @@ jobs:
       - name: Rebuild the dataset
         run: go run ./tools/build-dataset
 
+      - name: Compare with the committed dataset
+        id: diff
+        run: |
+          jq -r '.ways[].i' public/boardwalks.json | LC_ALL=C sort > "$RUNNER_TEMP/after-ids"
+          # tr strips the padding BSD wc adds, so the numbers stay usable in
+          # arithmetic and in the commit message.
+          before=$(wc -l < "$RUNNER_TEMP/before-ids" | tr -d ' ')
+          after=$(wc -l < "$RUNNER_TEMP/after-ids" | tr -d ' ')
+          # comm needs both sides sorted the same way, hence LC_ALL=C above.
+          added=$(comm -13 "$RUNNER_TEMP/before-ids" "$RUNNER_TEMP/after-ids" | wc -l | tr -d ' ')
+          removed=$(comm -23 "$RUNNER_TEMP/before-ids" "$RUNNER_TEMP/after-ids" | wc -l | tr -d ' ')
+          # Groups are what the app actually lists, so report them too. A way's
+          # group is its "c" field, or its own id when it starts the group.
+          groups=$(jq -r '.ways[] | (.c // .i)' public/boardwalks.json | LC_ALL=C sort -u | wc -l | tr -d ' ')
+
+          {
+            echo "before=$before"
+            echo "after=$after"
+            echo "added=$added"
+            echo "removed=$removed"
+            echo "groups=$groups"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "| | ways |"
+            echo "| --- | ---: |"
+            echo "| before | $before |"
+            echo "| added | +$added |"
+            echo "| removed | -$removed |"
+            echo "| after | $after |"
+            echo
+            echo "$groups groups."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Overpass can also cut a response short and still report success, which
       # looks like "these boardwalks were deleted". Measured over two weeks the
       # real drift was +0.43% (15,728 ways to 15,797), so a 5% fall is not the
       # map changing — it is a bad response. Keep the committed file instead.
+      #
+      # The test is on the *net* count rather than removals alone, because a way
+      # that OSM splits in two legitimately shows up as one removal and two
+      # additions.
       - name: Refuse a suspicious drop in coverage
         env:
-          BEFORE: ${{ steps.before.outputs.ways }}
+          BEFORE: ${{ steps.diff.outputs.before }}
+          AFTER: ${{ steps.diff.outputs.after }}
         run: |
-          after=$(jq '.ways | length' public/boardwalks.json)
-          echo "ways before: $BEFORE, after: $after"
-          if [ "$BEFORE" -gt 0 ] && [ $((after * 100)) -lt $((BEFORE * 95)) ]; then
-            echo "::error::Way count fell from $BEFORE to $after (more than 5%)." \
+          if [ "$BEFORE" -gt 0 ] && [ $((AFTER * 100)) -lt $((BEFORE * 95)) ]; then
+            echo "::error::Way count fell from $BEFORE to $AFTER (more than 5%)." \
               "Treating the Overpass response as incomplete; nothing committed."
             exit 1
           fi
 
       - name: Commit
         id: commit
+        env:
+          ADDED: ${{ steps.diff.outputs.added }}
+          REMOVED: ${{ steps.diff.outputs.removed }}
+          AFTER: ${{ steps.diff.outputs.after }}
+          GROUPS: ${{ steps.diff.outputs.groups }}
         run: |
           if git diff --quiet -- public/boardwalks.json; then
             echo "Dataset unchanged, nothing to commit."
@@ -76,7 +121,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add public/boardwalks.json
-          git commit -m "Refresh the dataset from Overpass"
+          # The counts go in the message body because the diff itself is one
+          # unreadable line of JSON: git log is the only place the change is
+          # legible after the run's logs expire.
+          git commit -m "Refresh the dataset from Overpass" \
+            -m "$ADDED ways added, $REMOVED removed: $AFTER ways in $GROUPS groups."
           # Rebase in case main moved while Overpass was working. The dataset is
           # the only file touched, so there is nothing here to conflict with.
           git pull --rebase origin main
