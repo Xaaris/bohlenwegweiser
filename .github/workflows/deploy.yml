@@ -1,10 +1,12 @@
 # Builds the site and publishes it to GitHub Pages.
 #
-# Runs on every push to main, and manually from the Actions tab.
+# Runs on every push to main, and manually from the Actions tab — including
+# from refresh-data.yml, which dispatches this workflow after committing a
+# rebuilt dataset.
 #
 # The dataset (public/boardwalks.json) is committed to the repository and gets
-# built along with everything else; this workflow does not regenerate it. To
-# refresh it, run `npm run data` locally and commit the result.
+# built along with everything else; this workflow does not regenerate it.
+# refresh-data.yml does that weekly, or run `npm run data` locally.
 name: Deploy
 
 on:

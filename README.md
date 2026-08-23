@@ -49,7 +49,26 @@ npm run data          # or: go run ./tools/build-dataset
 
 This queries Overpass once for the whole of Germany and rewrites
 `public/boardwalks.json`. It takes one to two minutes; Overpass is doing real
-work. Run it whenever you want fresh data — there is no scheduled job yet.
+work. Run it whenever you want fresh data.
+
+A GitHub Actions workflow (`.github/workflows/refresh-data.yml`) also does this
+every Sunday at 03:00 UTC, when Overpass is quietest in Europe, and can be
+started by hand from the Actions tab. It commits the result to `main` and then
+asks `deploy.yml` to publish, because a push made with `GITHUB_TOKEN` does not
+trigger other workflows by itself.
+
+Three things keep a bad run from shipping. The builder already refuses an
+Overpass remark or an empty response; the workflow additionally refuses a
+dataset that lost more than 5% of its ways, which is what a truncated response
+looks like; and because the builder sorts by way id, an unchanged week produces
+a byte-identical file, so there is no commit and no deploy.
+
+The 5% floor is well clear of real movement. Rebuilt two weeks after the
+committed file, the dataset went from 15,728 ways to 15,797 — a change of
++0.43%. OSM gains boardwalks far faster than it loses them.
+
+GitHub disables a scheduled workflow after 60 days without repository activity.
+If the data stops refreshing, look there first.
 
 Useful flags while working on the builder:
 

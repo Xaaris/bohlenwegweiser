@@ -1,0 +1,92 @@
+# Rebuilds public/boardwalks.json from Overpass once a week and commits it.
+#
+# Runs Sunday 03:00 UTC, when Overpass is quietest in Europe, and manually from
+# the Actions tab.
+#
+# GitHub disables a scheduled workflow after 60 days without repository
+# activity. If the data stops refreshing, that is the first thing to check.
+name: Refresh data
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  # Committing the rebuilt dataset.
+  contents: write
+  # Dispatching Deploy afterwards. A push made with GITHUB_TOKEN does not
+  # trigger other workflows, so the deploy has to be asked for explicitly.
+  actions: write
+
+# One rebuild at a time; a second would push onto a moving branch.
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          # The version the builder is developed against, kept in one place.
+          go-version-file: go.mod
+
+      - name: Count the ways currently shipped
+        id: before
+        run: echo "ways=$(jq '.ways | length' public/boardwalks.json)" >> "$GITHUB_OUTPUT"
+
+      # Overpass is queried once for the whole of Germany; this takes a minute
+      # or two. The builder fails by itself on a remark, an empty response or an
+      # empty result, and sorts its output by way id, so unchanged data produces
+      # a byte-identical file and no commit.
+      #
+      # If Overpass is down the job just fails: GitHub emails the failure and
+      # next Sunday tries again.
+      - name: Rebuild the dataset
+        run: go run ./tools/build-dataset
+
+      # Overpass can also cut a response short and still report success, which
+      # looks like "these boardwalks were deleted". Measured over two weeks the
+      # real drift was +0.43% (15,728 ways to 15,797), so a 5% fall is not the
+      # map changing — it is a bad response. Keep the committed file instead.
+      - name: Refuse a suspicious drop in coverage
+        env:
+          BEFORE: ${{ steps.before.outputs.ways }}
+        run: |
+          after=$(jq '.ways | length' public/boardwalks.json)
+          echo "ways before: $BEFORE, after: $after"
+          if [ "$BEFORE" -gt 0 ] && [ $((after * 100)) -lt $((BEFORE * 95)) ]; then
+            echo "::error::Way count fell from $BEFORE to $after (more than 5%)." \
+              "Treating the Overpass response as incomplete; nothing committed."
+            exit 1
+          fi
+
+      - name: Commit
+        id: commit
+        run: |
+          if git diff --quiet -- public/boardwalks.json; then
+            echo "Dataset unchanged, nothing to commit."
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/boardwalks.json
+          git commit -m "Refresh the dataset from Overpass"
+          # Rebase in case main moved while Overpass was working. The dataset is
+          # the only file touched, so there is nothing here to conflict with.
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      # Only reached when something was actually pushed, so an unchanged week
+      # does not redeploy an identical site.
+      - name: Publish the new data
+        if: steps.commit.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref main
