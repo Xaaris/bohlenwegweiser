@@ -1,3 +1,3 @@
 module github.com/johannesberger/bohlenwegweiser
 
-go 1.26
+go 1.27
