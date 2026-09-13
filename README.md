@@ -14,6 +14,8 @@ boardwalks in Germany, so it updates as you move.
 
 ## Getting started
 
+Requires Node.js 24 or newer.
+
 ```sh
 npm install
 npm run dev

@@ -2,6 +2,9 @@
   "name": "bohlenwegweiser",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "type": "module",
   "description": "Finder for OSM-mapped Bohlenwege and boardwalk-like paths.",
   "scripts": {
@@ -12,7 +15,7 @@
     "test:watch": "vitest",
     "data": "go run ./tools/build-dataset",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
+    "lint": "biome check --error-on-warnings .",
     "fix": "biome check --write .",
     "check": "npm run typecheck && npm run lint && npm test"
   },

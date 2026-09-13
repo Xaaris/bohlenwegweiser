@@ -441,17 +441,6 @@ select {
     box-shadow: 0 -6px 24px rgba(23, 32, 24, 0.16);
   }
 
-  /* Collapsed: hide the list and the attribution, keeping the header and the
-   * controls reachable.
-   *
-   * Hiding content rather than sliding the sheet by a measured offset, because
-   * the panel's height changes with the result count and any stored offset would
-   * then be wrong. */
-  .panel.collapsed .results,
-  .panel.collapsed > footer {
-    display: none;
-  }
-
   .sheet-handle {
     display: flex;
     align-items: center;
@@ -488,6 +477,18 @@ select {
    * screen, where it would cost 77 px of a short panel. main.ts appends it to
    * the end of the list instead. */
   .panel > footer {
+    display: none;
+  }
+
+  /* Collapsed: hide the list and the attribution, keeping the header and the
+   * controls reachable.
+   *
+   * Hiding content rather than sliding the sheet by a measured offset, because
+   * the panel's height changes with the result count and any stored offset would
+   * then be wrong. Keep this after the base selectors so Biome can verify the
+   * cascade without a descending-specificity warning. */
+  .panel.collapsed .results,
+  .panel.collapsed > footer {
     display: none;
   }
 
