@@ -7,10 +7,30 @@
  */
 export const DATASET_URL = "boardwalks.json";
 
-/** Base map tiles. */
-export const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+/**
+ * Base map tiles, from Stadia Maps. Four deliberate choices, in URL order:
+ *
+ * - Not tile.openstreetmap.org. Its policy demands a User-Agent naming the app,
+ *   which a browser cannot set, so no web app can comply at any traffic level.
+ * - `tiles-eu`, not the default: a German site without a Datenschutzerklärung
+ *   should not send visitor IPs outside the EU. Frankfurt and Paris, same service.
+ * - `alidade_smooth`, the muted style, because the app draws its own brown lines
+ *   on top and a colourful base competes with them.
+ * - `{r}` serves @2x on high-DPI screens. Measured 31 KB against 13 KB on the same
+ *   tile, billed higher too, so retina traffic spends the monthly allowance faster.
+ *
+ * Auth is by domain, not by key, so nothing secret ships here — but
+ * `xaaris.github.io` must stay on the dashboard allowlist or every tile 401s.
+ * See "Base map tiles" in the README.
+ */
+export const TILE_URL =
+  "https://tiles-eu.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png";
+
+/** Attribution Stadia requires: them, the style's tileset, and OSM for the data. */
 export const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  '&copy; <a href="https://stadiamaps.com/" target="_blank" rel="noopener noreferrer">Stadia Maps</a>, ' +
+  '&copy; <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a>, ' +
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
 
 /** Initial view: roughly all of Germany. */
 export const DEFAULT_CENTER = { lat: 51.1657, lon: 10.4515 };

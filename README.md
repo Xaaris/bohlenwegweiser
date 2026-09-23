@@ -438,11 +438,86 @@ Updating the map data is separate: run `npm run data` locally and commit
 
 The dataset removed the old problem of hitting public Overpass instances on
 every search; one query per manual rebuild is well within their usage policy.
-Two things remain:
+The tile server problem is solved; one thing remains:
 
-- A paid or self-hosted tile provider (`TILE_URL` in `src/config.ts`). The
-  OpenStreetMap tile server is not meant for public apps.
-- Impressum and Datenschutzerklärung pages.
+- Impressum and Datenschutzerklärung pages. Deliberately not built, which is why
+  the tile provider is the EU one — see below.
+
+## Base map tiles
+
+Tiles come from [Stadia Maps](https://stadiamaps.com/) (`TILE_URL` in
+`src/config.ts`), and **not** from `tile.openstreetmap.org` as they did before.
+
+That was not a capacity decision. The OSM tile usage policy requires a clear,
+unique `User-Agent` naming the app, and a browser cannot set that header from
+JavaScript — so no web app complies with it at all, whatever its traffic. Their
+enforcement is by `Referer`, and this site is public.
+
+Stadia authenticates by **domain** rather than by key: the request's `Origin` and
+`Referer` are matched against a domain registered in their dashboard, so no API
+key ships in this bundle and there is no secret to leak or rotate. The trade-off
+is a deployment prerequisite — **`xaaris.github.io` must be on the allowlist in
+the Stadia dashboard, or every tile returns 401 and the map is blank.** Their
+dashboard splits that into a subdomain and a domain: `xaaris` and `github.io`.
+
+A shared host like `github.io` does work, which their documentation does not say
+either way — it warns that some configurations report the host's subdomain rather
+than your domain. Measured after registering, same tile, same URL:
+
+| request | before | after |
+| ------- | -----: | ----: |
+| `Referer: xaaris.github.io` | 401 | **200** |
+| no `Referer` | 401 | 401 |
+
+So the allowlist is genuinely enforced rather than open, and a registered domain is
+all this needs. `localhost` is exempt, so local development works unconfigured.
+
+The endpoint is `tiles-eu.stadiamaps.com` rather than the default. It is free-plan
+compatible, served from Frankfurt and Paris, and otherwise the same service. A
+German-language site that sends its visitors' IP addresses to a server outside the
+EU is in a worse position without a Datenschutzerklärung, and using the EU
+endpoint is cheaper than writing one.
+
+The style is `alidade_smooth`, a muted basemap, because this app draws its own
+brown lines on top and a busy colourful base competes with them.
+
+**Free-tier limits.** 200,000 credits a month, and the plan hard-limits with HTTP
+429 once they are gone rather than billing overage. Retina screens cost more, since
+`{r}` resolves to `@2x` on them: measured on the same tile, 13 KB plain against
+31 KB at `@2x`, billed at a higher rate per tile. A month of high-DPI traffic
+therefore runs the allowance down faster than the view count suggests. One desktop
+view at zoom 13 fetches about 20 tiles, so the ceiling is roughly ten thousand
+views — ample here, but it is the number that would move first if the site got
+popular.
+
+A quota exhaustion or an outage leaves the base map blank but the boardwalks still
+drawn, since the dataset is local. `map.ts` catches `tileerror` and says so once —
+"Basiskarte nicht verfügbar, Wege werden weiter angezeigt" — rather than letting
+the app look broken. Verified by serving 429 and 503: the hint appears and all 172
+lines still draw.
+
+An **unregistered domain is the exception**, and it is worth knowing before
+deploying. Stadia answers a 401 with a valid PNG reading "401 Error — Invalid
+Authentication", so the browser decodes it as a good image and `tileerror` never
+fires. Cross-origin images also report `responseStatus` 0 in Resource Timing, so
+the page cannot read the status without re-fetching a tile purely to inspect it.
+Left undetected deliberately: the failure is permanent rather than intermittent,
+identical on every tile, and already spells itself out on screen. The map will read
+"401 Error" in a grid instead of showing a hint — that means the domain is not on
+the allowlist.
+
+Switching providers is one file: `TILE_URL` and `TILE_ATTRIBUTION` in
+`src/config.ts`. Attribution has to keep crediting whoever serves the tiles *and*
+OpenStreetMap for the underlying data; the two are separate obligations and the
+footer's ODbL note covers only the latter.
+
+`maxZoom` in `src/map.ts` is 19 while Alidade Smooth reaches 20, and that is a
+choice rather than an oversight. Both work — driven to each level in a real browser,
+every level from 8 to 20 returned 200 for every tile, 20 included. But z20 puts the
+scale bar at 5 m: one footpath across the screen, no boardwalk in view, and four
+tiles fetched for the area z19 covered in one. Nothing in the app zooms past 16 by
+itself — `fitTo` caps at 16 and `Mein Standort` lands at 13 — so 19 is already two
+levels of headroom for manual zooming.
 
 ## Data
 

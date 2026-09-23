@@ -36,6 +36,17 @@ export type MapCallbacks = {
   /** Fires after any pan or zoom, and once on startup. */
   onViewChange: () => void;
   onGroupClick: (groupId: string) => void;
+  /**
+   * Fires once when base tiles stop loading — provider down, or a 429 once the
+   * free quota is gone. Once, not per tile: they all fail together.
+   *
+   * Does **not** fire for an unregistered domain. Stadia answers that 401 with a
+   * valid PNG reading "401 Error", so the browser decodes it as a good image and
+   * Leaflet sees no error; cross-origin images also report `responseStatus` 0, so
+   * the page cannot read the status without re-fetching a tile to inspect it.
+   * Left undetected: that failure is permanent and already legible on the map.
+   */
+  onTileError: () => void;
 };
 
 export class BoardwalkMap {
@@ -49,7 +60,23 @@ export class BoardwalkMap {
       DEFAULT_ZOOM,
     );
 
-    L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_ATTRIBUTION }).addTo(this.map);
+    // 19, not the style's 20. Both serve tiles fine, but z20 is a 5 m scale bar:
+    // one footpath, no boardwalk, and four tiles fetched for the view that 19
+    // covered in one.
+    const tiles = L.tileLayer(TILE_URL, {
+      maxZoom: 19,
+      attribution: TILE_ATTRIBUTION,
+    }).addTo(this.map);
+
+    // A blank base map with the boardwalks still on it looks broken when it is
+    // not — the dataset is local. Say so; see onTileError for what this misses.
+    let reportedTileError = false;
+    tiles.on("tileerror", () => {
+      if (reportedTileError) return;
+      reportedTileError = true;
+      callbacks.onTileError();
+    });
+
     L.control.scale({ imperial: false }).addTo(this.map);
     this.resultLayer.addTo(this.map);
 
