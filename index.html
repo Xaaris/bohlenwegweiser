@@ -22,6 +22,11 @@
         <div id="zoomHint" class="zoom-hint" aria-hidden="true" hidden>
           Hineinzoomen, um Bohlenwege zu sehen
         </div>
+        <!-- Announced, unlike the two above: nothing else in the UI reports a tile
+             failure, so aria-hidden would drop it entirely. -->
+        <div id="tileHint" class="tile-hint" role="status" hidden>
+          Basiskarte nicht verfügbar, Wege werden weiter angezeigt
+        </div>
       </main>
 
       <aside class="panel">

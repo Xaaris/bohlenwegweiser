@@ -47,6 +47,7 @@ const el = {
   results: byId<HTMLOListElement>("results"),
   mapBusy: byId<HTMLDivElement>("mapBusy"),
   zoomHint: byId<HTMLDivElement>("zoomHint"),
+  tileHint: byId<HTMLDivElement>("tileHint"),
   panel: document.querySelector<HTMLElement>(".panel"),
   sheetToggle: byId<HTMLButtonElement>("sheetToggle"),
   sheetLabel: document.querySelector<HTMLElement>(".sheet-label"),
@@ -62,6 +63,10 @@ function byId<T extends HTMLElement>(id: string): T {
 const map = new BoardwalkMap("map", {
   onViewChange: () => void refresh(),
   onGroupClick: (id) => select(id, false),
+  // Only the base map is gone; the boardwalks are local and still drawn.
+  onTileError: () => {
+    el.tileHint.hidden = false;
+  },
 });
 
 el.locate.addEventListener("click", () => void locate());
