@@ -34,10 +34,10 @@ before that copy was removed.
 
 What is left to keep in step:
 
-| Browser | Go builder |
-| --- | --- |
-| `MIN_LENGTH_M` = 25 (`src/config.ts`) | `minLengthM` (`main.go`) |
-| `kindOf` (`src/boardwalks.ts`) | `boardwalkTags`, `keepTags` (`main.go`) |
+| Browser                               | Go builder                              |
+| ------------------------------------- | --------------------------------------- |
+| `MIN_LENGTH_M` = 25 (`src/config.ts`) | `minLengthM` (`main.go`)                |
+| `kindOf` (`src/boardwalks.ts`)        | `boardwalkTags`, `keepTags` (`main.go`) |
 
 **Deciding what counts as a boardwalk lives only in the builder** (`isRelevant`,
 `looksLikeBoardwalk`, `boardwalkTags`, `nameFragments`, `relevantHighways`,
@@ -47,7 +47,7 @@ compacted tracks were being shipped as boardwalks. Never let it override an
 explicit `bridge=boardwalk`, and note that any value mentioning wood is kept. The
 browser used to repeat those checks defensively; measured against the real file
 the copy dropped 0 of 15,256 ways, so it was removed. `kindOf`
-(`src/boardwalks.ts`) only *classifies* what the builder shipped — add a tag to
+(`src/boardwalks.ts`) only _classifies_ what the builder shipped — add a tag to
 `boardwalkTags` and it usually wants a case there too, and anything `kindOf` reads
 has to be in `keepTags`.
 
@@ -69,7 +69,7 @@ networks split. Don't add an angle test — a right-angle branch is still the sa
 network. Don't raise `joinDistanceM` either; 20 m already covers 69% of joins
 (median 5.41 m) and widening it risks chaining parallel boardwalks.
 
-Two more copies that are *not* Go-related and get missed:
+Two more copies that are _not_ Go-related and get missed:
 
 - Line colours in `LINE_STYLE`/`SELECTED_STYLE` (`src/map.ts`) are hard-coded hex
   because CSS variables aren't readable from JS. Keep them in step with the
@@ -83,7 +83,6 @@ Two more copies that are *not* Go-related and get missed:
   The lowest one must equal `MIN_LENGTH_M`; `main.ts` clamps the value anyway so
   a stale option can't request data that isn't in the file.
 
-
 Length filtering runs on **groups, not individual ways** — the median OSM way is
 10 m and 81% are under 25 m. Filtering per way would delete real boardwalks.
 
@@ -96,7 +95,7 @@ Length filtering runs on **groups, not individual ways** — the median OSM way 
 - **Below `MIN_ZOOM_FOR_RESULTS` (9) nothing is drawn** and `#zoomHint` says so.
   The threshold is a measurement (zoom 8 = 2559 lines = an 87 ms blocking task).
 - **Any call that recentres the map must pass `hiddenMapHeight()`** as
-  `moveTo`'s `offsetY`. On narrow screens the panel is a bottom sheet *over* the
+  `moveTo`'s `offsetY`. On narrow screens the panel is a bottom sheet _over_ the
   map, so without the offset results land behind it and the feature looks dead.
 - **Collapsing the sheet hides `.results`/`footer`**; it never translates the
   panel by a measured pixel offset. The panel's height changes with the result
@@ -113,7 +112,7 @@ Length filtering runs on **groups, not individual ways** — the median OSM way 
   still draws everything.
 - **A result is labelled by `kind`, not called "Bohlenweg" regardless.** Only 877
   of 8022 groups are boardwalks; 3237 are wooden bridges and 572 are stairs. The
-  kind is the one covering most of the group's *length* (1577 groups mix kinds),
+  kind is the one covering most of the group's _length_ (1577 groups mix kinds),
   `man_made=pier` beats any bridge tag, and nothing is excluded — that was a
   deliberate product call, so don't start dropping kinds in the builder.
 - **Every map line is the same brown, solid, and only the selection is rust.**
@@ -147,7 +146,7 @@ Length filtering runs on **groups, not individual ways** — the median OSM way 
 - ESM with `verbatimModuleSyntax`: relative imports use the `.js` extension
   (`./geo.js`), and types are imported with `import type`.
 - Biome formats: 2 spaces, 90-column lines. Run `npm run fix`.
-- Comments explain *why* (trade-offs, measurements), not what. Match that tone;
+- Comments explain _why_ (trade-offs, measurements), not what. Match that tone;
   README sections mirror these rationales — update both when behaviour changes.
 - User-facing strings are German (`KIND_LABELS`, `SearchError` messages); code and
   comments are English.
