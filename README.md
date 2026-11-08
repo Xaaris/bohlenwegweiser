@@ -95,15 +95,15 @@ Needs Go 1.26 or newer. There are no dependencies beyond the standard library.
 
 The code is deliberately small. In rough order of interest:
 
-| File                | Contains                                                |
-| ------------------- | ------------------------------------------------------- |
-| `src/types.ts`      | The data types. Start here.                              |
-| `src/config.ts`     | Tunable values: dataset URL, zoom threshold, list cap.   |
-| `src/dataset.ts`    | Loads the dataset.                                       |
-| `src/boardwalks.ts` | Label, group, sort and clip to view.                     |
-| `src/geo.ts`        | Distance maths and number formatting.                    |
-| `src/map.ts`        | All Leaflet-specific code.                               |
-| `src/main.ts`       | Wires the DOM to the above.                              |
+| File                | Contains                                               |
+| ------------------- | ------------------------------------------------------ |
+| `src/types.ts`      | The data types. Start here.                            |
+| `src/config.ts`     | Tunable values: dataset URL, zoom threshold, list cap. |
+| `src/dataset.ts`    | Loads the dataset.                                     |
+| `src/boardwalks.ts` | Label, group, sort and clip to view.                   |
+| `src/geo.ts`        | Distance maths and number formatting.                  |
+| `src/map.ts`        | All Leaflet-specific code.                             |
+| `src/main.ts`       | Wires the DOM to the above.                            |
 
 Plus `tools/build-dataset/`, which produces the dataset and decides both what
 counts as a boardwalk and which ways belong together.
@@ -235,7 +235,7 @@ The surface test applies **only** to the name-only path. A way tagged
 `bridge=boardwalk` with `surface=compacted` is odd tagging, but the explicit tag
 is the stronger signal and it is kept.
 
-Deciding *whether* a way qualifies happens only in `tools/build-dataset`. The
+Deciding _whether_ a way qualifies happens only in `tools/build-dataset`. The
 browser used to repeat those checks as a safety net, but measured against the
 real file they dropped 0 of 15,256 ways — a second copy to keep in sync for no
 effect. It now only labels what the builder shipped. Across the whole dataset
@@ -247,13 +247,13 @@ surface tag.
 The app used to label every result "Bohlenweg". Counting the shipped groups, most
 of them are not one:
 
-| kind | label | groups | median length |
-| ---- | ----- | ------ | ------------- |
-| wooden bridge | _Holzbrücke_ | 3237 | 40 m |
-| wooden path | _Holzweg_ | 2328 | 83 m |
-| pier or jetty | _Steg_ | 1008 | 63 m |
-| boardwalk | _Bohlenweg_ | 877 | 81 m |
-| wooden stairs | _Holztreppe_ | 572 | 41 m |
+| kind          | label        | groups | median length |
+| ------------- | ------------ | ------ | ------------- |
+| wooden bridge | _Holzbrücke_ | 3237   | 40 m          |
+| wooden path   | _Holzweg_    | 2328   | 83 m          |
+| pier or jetty | _Steg_       | 1008   | 63 m          |
+| boardwalk     | _Bohlenweg_  | 877    | 81 m          |
+| wooden stairs | _Holztreppe_ | 572    | 41 m          |
 
 A 40 m wooden bridge over a stream is not a boardwalk, and neither is a flight of
 steps. Each group now carries a `kind`, shown on its card and in the map tooltip.
@@ -302,12 +302,12 @@ Lines were briefly coloured per kind. That was wrong twice over: there was no
 legend, so five colours meant nothing to the reader, and the distinction is
 invisible at the zooms people actually use. Measured:
 
-| | |
-| --- | --- |
-| groups that are a single kind | 80.3% |
-| median minority stretch in a mixed group | 10.7 m |
+|                                                      |            |
+| ---------------------------------------------------- | ---------- |
+| groups that are a single kind                        | 80.3%      |
+| median minority stretch in a mixed group             | 10.7 m     |
 | that stretch at zoom 14, where _Mein Standort_ lands | **1.9 px** |
-| minority stretches at least 8 px wide at zoom 14 | 10.2% |
+| minority stretches at least 8 px wide at zoom 14     | 10.2%      |
 
 Colouring per way would have spent the whole colour channel on something usually
 too small to see, and when it did show it would read as a rendering artefact. It
@@ -340,15 +340,15 @@ setting. _Bohle_, _Bretter_, _Planke_, _Knüppel_ and _Steg_ describe planks, lo
 or a raised walkway. Words that only say where a path goes were measured and left
 out:
 
-| candidate  | ways in Germany | walkable, untagged | verdict |
-| ---------- | --------------- | ------------------ | ------- |
-| `Knüppelweg` | 33 | 8 | **added** — a corduroy road by definition |
-| `Plankenweg` | 10 | 3 | **added** — planks are in the name |
-| `Knüppelpfad` | 1 | 0 | **added** for symmetry; its one way was already in via `surface=wood` |
-| `Holzweg` | 973 | 72 | rejected — a timber haul road, and the idiom for the wrong track |
-| `Moorweg` | 884 | 51 | rejected — a path through a moor need not be planked |
-| `Moorpfad` | 7 | 2 | rejected — same reasoning |
-| `Stegweg` | 19 | 4 | rejected — a way *to* a Steg is not itself one |
+| candidate     | ways in Germany | walkable, untagged | verdict                                                               |
+| ------------- | --------------- | ------------------ | --------------------------------------------------------------------- |
+| `Knüppelweg`  | 33              | 8                  | **added** — a corduroy road by definition                             |
+| `Plankenweg`  | 10              | 3                  | **added** — planks are in the name                                    |
+| `Knüppelpfad` | 1               | 0                  | **added** for symmetry; its one way was already in via `surface=wood` |
+| `Holzweg`     | 973             | 72                 | rejected — a timber haul road, and the idiom for the wrong track      |
+| `Moorweg`     | 884             | 51                 | rejected — a path through a moor need not be planked                  |
+| `Moorpfad`    | 7               | 2                  | rejected — same reasoning                                             |
+| `Stegweg`     | 19              | 4                  | rejected — a way _to_ a Steg is not itself one                        |
 
 Adding the three words brought in 11 ways: 8 `Knüppelweg` and 3 `Plankenweg`.
 `Knüppelpfad` added none. _Bohlenstraße_ deliberately does not match — a
@@ -361,7 +361,7 @@ just 10 m long. The builder merges any two ways that come within 20 m of each
 other. Proximity is the only test.
 
 Proximity is tested between **all vertices**, not just the two endpoints of each
-way. OSM routinely splits a way so that one *ends in the middle of another* — a
+way. OSM routinely splits a way so that one _ends in the middle of another_ — a
 side branch off a boardwalk, a jetty off a walkway — and neither endpoint of the
 through-way is anywhere near that junction. Comparing endpoints only left **303
 networks split** that are one thing on the ground.
@@ -394,7 +394,7 @@ physically connected and joining them is simply correct. Dropping the rule merge
 27 groups. With it gone, `samePath` had nothing left to do and was deleted rather
 than left as a function that always returns true.
 
-`layer` looks like it should keep a bridge crossing *over* a boardwalk separate,
+`layer` looks like it should keep a bridge crossing _over_ a boardwalk separate,
 and it is in the raw response. It is not usable: **2472 pairs share an exact
 coordinate while differing in layer**, including ways with identical names, because
 a ramp onto a bridge legitimately changes layer. A shared node means you can walk
@@ -464,10 +464,10 @@ A shared host like `github.io` does work, which their documentation does not say
 either way — it warns that some configurations report the host's subdomain rather
 than your domain. Measured after registering, same tile, same URL:
 
-| request | before | after |
-| ------- | -----: | ----: |
-| `Referer: xaaris.github.io` | 401 | **200** |
-| no `Referer` | 401 | 401 |
+| request                     | before |   after |
+| --------------------------- | -----: | ------: |
+| `Referer: xaaris.github.io` |    401 | **200** |
+| no `Referer`                |    401 |     401 |
 
 So the allowlist is genuinely enforced rather than open, and a registered domain is
 all this needs. `localhost` is exempt, so local development works unconfigured.
@@ -507,7 +507,7 @@ identical on every tile, and already spells itself out on screen. The map will r
 the allowlist.
 
 Switching providers is one file: `TILE_URL` and `TILE_ATTRIBUTION` in
-`src/config.ts`. Attribution has to keep crediting whoever serves the tiles *and*
+`src/config.ts`. Attribution has to keep crediting whoever serves the tiles _and_
 OpenStreetMap for the underlying data; the two are separate obligations and the
 footer's ODbL note covers only the latter.
 
