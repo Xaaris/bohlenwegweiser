@@ -36,8 +36,8 @@ const state = {
   /** Groups currently shown, after the filter. */
   visible: [] as Group[],
   selectedId: null as string | null,
-  /** Lets us drop a load that a newer one has replaced. */
-  inFlight: null as AbortController | null,
+  /** Lets a newer viewport invalidate the results of an older refresh. */
+  refreshRevision: 0,
 };
 
 const el = {
@@ -48,16 +48,22 @@ const el = {
   mapBusy: byId<HTMLDivElement>("mapBusy"),
   zoomHint: byId<HTMLDivElement>("zoomHint"),
   tileHint: byId<HTMLDivElement>("tileHint"),
-  panel: document.querySelector<HTMLElement>(".panel"),
+  panel: bySelector<HTMLElement>(".panel"),
   sheetToggle: byId<HTMLButtonElement>("sheetToggle"),
-  sheetLabel: document.querySelector<HTMLElement>(".sheet-label"),
-  footer: document.querySelector<HTMLElement>(".panel > footer"),
+  sheetLabel: bySelector<HTMLElement>(".sheet-label"),
+  footer: bySelector<HTMLElement>(".panel > footer"),
 };
 
 function byId<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
   if (!found) throw new Error(`Missing element #${id}`);
   return found as T;
+}
+
+function bySelector<T extends Element>(selector: string): T {
+  const found = document.querySelector<T>(selector);
+  if (!found) throw new Error(`Missing element ${selector}`);
+  return found;
 }
 
 const map = new BoardwalkMap("map", {
@@ -84,13 +90,9 @@ el.minLength.addEventListener("change", () => {
 /** Collapses the sheet to just its handle and header, or opens it again. */
 function toggleSheet(collapse = !isCollapsed()): void {
   const panel = el.panel;
-  if (!panel) return;
-
   panel.classList.toggle("collapsed", collapse);
   el.sheetToggle.setAttribute("aria-expanded", String(!collapse));
-  if (el.sheetLabel) {
-    el.sheetLabel.textContent = collapse ? "Liste anzeigen" : "Liste einklappen";
-  }
+  el.sheetLabel.textContent = collapse ? "Liste anzeigen" : "Liste einklappen";
 
   // Leaflet needs to know the visible area changed, or clicks land in the wrong
   // place after the sheet moves.
@@ -98,7 +100,7 @@ function toggleSheet(collapse = !isCollapsed()): void {
 }
 
 function isCollapsed(): boolean {
-  return el.panel?.classList.contains("collapsed") ?? false;
+  return el.panel.classList.contains("collapsed");
 }
 
 // Draw whatever is in the initial view.
@@ -142,7 +144,7 @@ async function locate(): Promise<void> {
  * Zero on wide screens, where the panel sits beside the map instead of over it.
  */
 function hiddenMapHeight(): number {
-  if (!isNarrow() || !el.panel || isCollapsed()) return 0;
+  if (!isNarrow() || isCollapsed()) return 0;
 
   const covered = window.innerHeight - el.panel.getBoundingClientRect().top;
   return Math.max(0, Math.round(covered));
@@ -177,11 +179,14 @@ function locationErrorMessage(error: unknown): string {
  * measured under 1 ms for the whole country.
  */
 async function refresh(): Promise<void> {
+  const revision = ++state.refreshRevision;
+
   if (map.zoom < MIN_ZOOM_FOR_RESULTS) {
     state.groups = [];
     state.selectedId = null;
     applyFilter();
     el.zoomHint.hidden = false;
+    el.mapBusy.hidden = true;
     reportCount();
     return;
   }
@@ -189,15 +194,13 @@ async function refresh(): Promise<void> {
   el.zoomHint.hidden = true;
 
   if (!state.dataset) {
-    state.inFlight?.abort();
-    const controller = new AbortController();
-    state.inFlight = controller;
-
     el.mapBusy.hidden = false;
     setStatus("Lade Wegedaten …", "busy");
 
     try {
-      const dataset = await loadDataset(controller.signal);
+      const dataset = await loadDataset();
+      if (revision !== state.refreshRevision) return;
+
       // Grouped once, here, rather than per pan: a group built from only the
       // ways on screen changed length as the map moved. 12 ms for all 15,283
       // ways, inside the busy indicator, against 0.1 ms per pan afterwards.
@@ -205,17 +208,14 @@ async function refresh(): Promise<void> {
       state.allGroups = groupWays(parseWays(dataset.ways));
       state.dataset = dataset;
     } catch (error) {
-      if (controller.signal.aborted) return;
+      if (revision !== state.refreshRevision) return;
 
       const message =
         error instanceof SearchError ? error.message : "Die Suche ist fehlgeschlagen.";
       setStatus(message, "error", error instanceof SearchError && error.retryable);
       return;
     } finally {
-      if (state.inFlight === controller) {
-        el.mapBusy.hidden = true;
-        state.inFlight = null;
-      }
+      if (revision === state.refreshRevision) el.mapBusy.hidden = true;
     }
   }
 
@@ -282,12 +282,12 @@ function render(): void {
  * reachable without taking 77 px of a short panel.
  */
 function appendAttribution(): void {
-  if (!el.footer || !isNarrow()) return;
+  if (!isNarrow()) return;
 
   const item = document.createElement("li");
   item.className = "attribution";
   // Cloned so the desktop footer keeps working when the viewport widens again.
-  item.append(...[...el.footer.cloneNode(true).childNodes]);
+  item.append(...el.footer.cloneNode(true).childNodes);
   el.results.append(item);
 }
 
@@ -391,11 +391,13 @@ function emptyReason(): string {
 
 /** Puts the current result count into the status line. */
 function reportCount(): void {
-  if (state.visible.length > 0) {
-    const longest = formatDistance(Math.max(...state.visible.map((g) => g.lengthM)));
+  const longestGroup = state.visible[0];
+  if (longestGroup) {
+    const longest = formatDistance(longestGroup.lengthM);
     const label = state.visible.length === 1 ? "Bohlenweg" : "Bohlenwege";
     setStatus(`${state.visible.length} ${label}, längster ${longest}.`);
-  } else {
-    setStatus(emptyReason());
+    return;
   }
+
+  setStatus(emptyReason());
 }

@@ -58,20 +58,19 @@ let pending: Promise<Dataset> | null = null;
  * Concurrent callers share one request; a failed load is forgotten so a retry
  * can try again.
  */
-export function loadDataset(signal?: AbortSignal): Promise<Dataset> {
-  pending ??= fetchDataset(signal).catch((error: unknown) => {
+export function loadDataset(): Promise<Dataset> {
+  pending ??= fetchDataset().catch((error: unknown) => {
     pending = null;
     throw error;
   });
   return pending;
 }
 
-async function fetchDataset(signal?: AbortSignal): Promise<Dataset> {
+async function fetchDataset(): Promise<Dataset> {
   let response: Response;
   try {
-    response = await fetch(DATASET_URL, { signal });
-  } catch (error) {
-    if (signal?.aborted) throw error;
+    response = await fetch(DATASET_URL);
+  } catch {
     throw new SearchError("Die Wegedaten konnten nicht geladen werden.", true);
   }
 
